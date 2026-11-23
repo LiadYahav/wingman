@@ -1,23 +1,19 @@
-"""Proposing changes as merge requests: the ``ClusterProvisioner`` Wingman uses today.
+"""Proposing changes as merge requests: the ``ClusterProvisioner`` and the specs' writer.
 
 Each change is exactly one commit on a new branch cut from the project's
 default branch, plus one merge request back into it (ADR-0017):
 
 - branch ``platform/<user>/<action>-<resource>-<UTC stamp>``, title
-  ``[Wingman/Day1] Create cluster <name> from spec <spec>`` and the
-  description footer, all from ``wingman_core.domain.mr_conventions``
-  (ADR-0007);
+  ``[Wingman/Day1] Modify cluster <name>`` and the description footer, all
+  from ``wingman_core.domain.mr_conventions`` (ADR-0007);
 - labels ``wingman``, the repository's label (``day1``/``specs``) and the action;
 - the commit is authored by the requesting user;
 - an update or delete carries the ``last_commit_id`` it was read at (ADR-0006).
 
-Nothing is retried; nothing force-pushes. CI and the allocate-segment
-workflow then add their own commits to the branch. Opening an MR clears the
-repository's cached MR lists before the API answers.
-
-When the ``create-cluster`` workflow exists, a second ``ClusterProvisioner``
-that starts it replaces :class:`GitClusterProvisioner` in ``main.py``; the use
-cases do not change.
+Nothing is retried; nothing force-pushes. CI may add its own commits to the
+branch. Opening an MR clears the repository's cached MR lists before the API
+answers. A new cluster is never one of these: the platform's provision-cluster
+workflow opens its merge request (ADR-0042, amended 2026-11-23).
 """
 
 from __future__ import annotations
@@ -168,7 +164,6 @@ class MergeRequestWriter:
 
 
 _CLUSTER_VERBS: Final = {
-    ClusterAction.CREATE: Verb.CREATE,
     ClusterAction.MODIFY: Verb.MODIFY,
     ClusterAction.DELETE: Verb.DELETE,
     ClusterAction.SYNC: Verb.SYNC,
@@ -177,7 +172,7 @@ _CLUSTER_VERBS: Final = {
 
 
 class GitClusterProvisioner:
-    """``ClusterProvisioner``: a cluster change becomes a merge request in the day1 repo."""
+    """``ClusterProvisioner``: a change to a cluster file becomes a merge request in day1."""
 
     def __init__(self, writer: MergeRequestWriter) -> None:
         """Open MRs through ``writer`` (the day1 project's)."""
@@ -264,8 +259,6 @@ def _commit_message(change: ClusterChange) -> str:
 
 
 def _title_extra(change: ClusterChange) -> str:
-    if change.action is ClusterAction.CREATE and change.spec_name:
-        return f"from spec {change.spec_name}"
     if change.action is ClusterAction.SYNC and change.spec_name:
         return f"to spec {change.spec_name} v{change.spec_version}"
     if change.action is ClusterAction.IMPORT:
@@ -277,10 +270,7 @@ def _file_change(change: ClusterChange) -> FileChange:
     path = change.cluster.path
     if change.action is ClusterAction.DELETE:
         return FileChange.delete(path, last_commit_id=change.last_commit_id)
-    content = change.content or ""
-    if change.action is ClusterAction.CREATE:
-        return FileChange.create(path, content)
-    return FileChange.update(path, content, last_commit_id=change.last_commit_id)
+    return FileChange.update(path, change.content or "", last_commit_id=change.last_commit_id)
 
 
 _SPEC_VERBS: Final = {

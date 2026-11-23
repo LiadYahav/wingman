@@ -57,7 +57,7 @@ themselves are in `docs/ecosystem/README.md`.
 
 | System | Owns | Wingman's part |
 |---|---|---|
-| Git (day1 values repo, NodePool files, `sigs/<team>`) | Desired state | Writes it by MR today: day1 until the create workflow exists (convention 13), and day2 |
+| Git (day1 values repo, NodePool files, `sigs/<team>`) | Desired state | Writes it by MR today: day1's edits, deletes, syncs and imports (convention 13; a create starts provision-cluster since 3.56.0, ADR-0042), and day2 |
 | A person merging | Approval | Wingman's approvals page is where it happens, or GitLab (ecosystem question 5) |
 | ArgoCD | Applying what is merged | Never applies anything; shows status once it can read it |
 | Temporal workflows | Every operation with more than one step or system: create (03), scale (04), delete (05), upgrades (13-17), version band moves (18), adding and removing servers (01, 02). Validation, preflight and capacity admission live here | Starts the customer ones, passes totals, shows progress and errors in plain words, and links the run |
@@ -69,9 +69,9 @@ themselves are in `docs/ecosystem/README.md`.
 ## Rules Wingman follows from this
 
 1. **Wingman doesn't orchestrate.** More than one step across systems is a
-   workflow; Wingman starts it and shows it. The one exception, day1 create,
-   edit and delete by MR, sits behind the `ClusterProvisioner` adapter until
-   the workflows exist.
+   workflow; Wingman starts it and shows it. The one exception, day1 edit and
+   delete by MR, sits behind the `ClusterProvisioner` adapter until the
+   workflows exist; create starts provision-cluster since 3.56.0 (ADR-0042).
 2. **Amended 2026-11-12:** Wingman ranks MCEs for a new cluster by what
    they hold and have free, and checks the free pods a control plane needs
    (single-pane.md, workstream 6); it still never reserves capacity. As first

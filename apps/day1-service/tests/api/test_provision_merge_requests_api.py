@@ -21,6 +21,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 
 Auth = Callable[[User], dict[str, str]]
 NEW = "ocp4-prod-falcon-site1"
+LARK = "ocp4-prod-lark-site1"
 SUGGEST = "/api/day1/clusters/name-suggestion"
 HOOK = {"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Merge Request Hook"}
 
@@ -28,12 +29,16 @@ HOOK = {"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Merge Reques
 async def test_the_workflows_mr_is_listed_and_marked_as_the_workflows(
     client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    created = await client.post(
-        "/api/day1/clusters",
-        json=support.create_body("ocp4-prod-lynx-site1"),
+    lark = (await client.get(f"/api/day1/clusters/{LARK}", headers=auth(support.ALICE))).json()
+    edited = await client.patch(
+        f"/api/day1/clusters/{LARK}",
+        json={
+            "updated_yaml": lark["yaml"].replace("replicas: 3", "replicas: 4"),
+            "last_commit_id": lark["last_commit_id"],
+        },
         headers=auth(support.ALICE),
     )
-    assert created.status_code == 201, created.text
+    assert edited.status_code == 200, edited.text
     workflow = await support.open_provision_mr(gitlab, NEW)
     await support.open_provision_mr(gitlab, "ocp4-prod-orca-site1", branch="someone/orca")
     await support.open_provision_mr(
@@ -42,7 +47,7 @@ async def test_the_workflows_mr_is_listed_and_marked_as_the_workflows(
 
     listed = (await client.get("/api/day1/approvals", headers=auth(support.VIEWER))).json()
     assert {m["source_branch"]: m["opened_by_workflow"] for m in listed} == {
-        created.json()["source_branch"]: None,
+        edited.json()["source_branch"]: None,
         f"provision-cluster/{NEW}": "provision-cluster",
     }, "an unlabelled MR on any other branch is not listed"
     [mine] = [m for m in listed if m["opened_by_workflow"]]
@@ -78,7 +83,7 @@ async def test_an_unlabelled_mr_on_another_branch_does_not_hold_a_name(
     created = await client.post(
         "/api/day1/clusters", json=support.create_body(NEW), headers=auth(support.ALICE)
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 202, created.text
 
 
 async def test_it_is_reviewed_in_gitlab_never_through_wingman(

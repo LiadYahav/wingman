@@ -1,7 +1,7 @@
 """Editing a cluster file's text so that everything else stays byte for byte (ADR-0037).
 
 A cluster file is written by several hands: people (with their comments),
-Wingman, the allocate-segment workflow (``vlanId``, ``dhcp_values``) and the
+Wingman, the provision-cluster workflow (``vlanId``, ``dhcp_values``) and the
 day1 CI, which appends its block under ``# === Added by CI ===`` (``mcFiles``,
 ``mcConfigMap``). The platform's own scripts edit these files line by line
 for that reason; a YAML round trip would reflow and re-quote all of it, drop

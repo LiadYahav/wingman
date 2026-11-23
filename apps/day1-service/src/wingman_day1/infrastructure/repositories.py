@@ -3,8 +3,8 @@
 Files and trees at the default branch come from ``RepoSnapshots`` (ADR-0035):
 one head check per TTL, one archive per commit. History, commits and merge
 requests are cached for a few seconds (ADR-0011). Reads at any other ref (an
-MR's branch, a commit) are not cached, because CI and the allocate-segment
-workflow move MR branches behind Wingman's back. A failed read is never
+MR's branch, a commit) are not cached, because CI and the platform's
+workflows move MR branches behind Wingman's back. A failed read is never
 cached. Concurrent misses share one GitLab call.
 """
 

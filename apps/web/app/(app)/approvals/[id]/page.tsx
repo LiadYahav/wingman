@@ -30,7 +30,7 @@ import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
 /** 409 REVISION_CONFLICT on approve or edit: the head is not the one reviewed. */
 const BRANCH_MOVED =
-  "The branch moved since you loaded this MR (CI or the allocate-segment workflow pushed to it). Nothing was merged. Reload and review the new diff again.";
+  "The branch moved since you loaded this MR (CI or a platform workflow pushed to it). Nothing was merged. Reload and review the new diff again.";
 
 // ── File diff card ─────────────────────────────────────────────────────────────
 

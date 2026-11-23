@@ -24,6 +24,7 @@ from wingman_day1.domain.upgrades import AgentVerdict, PendingAction, UpgradeRun
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.fake_upgrade_script import (
     default_upgrade_file,
@@ -67,6 +68,7 @@ async def on(
     day2: FakeDay2Addons,
     clock: Any,
     upgrade: FakeUpgradeWorkflow,
+    provision: FakeProvisionWorkflow,
 ) -> AsyncIterator[httpx.AsyncClient]:
     app = support.build_app(
         gitlab=gitlab,
@@ -75,6 +77,7 @@ async def on(
         day2=day2,
         clock=clock,
         upgrade=upgrade,
+        provision=provision,
         day1_upgrades=True,
         workflows_api_url="http://workflows-orchestrator-api.test:8080",
         server_scan_url="http://server-scan.test:8000",
@@ -384,24 +387,14 @@ async def test_a_review_edit_may_not_change_an_existing_clusters_versions(
     assert any("Versions change through Upgrade" in p for p in edit.json()["details"]["problems"])
 
 
-async def test_a_create_still_writes_and_its_review_may_change_the_starting_version(
-    on: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+async def test_a_create_still_sets_its_starting_version(
+    on: httpx.AsyncClient, auth: Auth, support: Any, provision: FakeProvisionWorkflow
 ) -> None:
     created = await on.post(
         "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
     )
-    assert created.status_code == 201, created.text
-    mr = created.json()
-    pid = await support.project_id(gitlab, support.DAY1)
-    path = "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-falcon-site1.yaml"
-    content = gitlab.snapshot(pid, mr["source_branch"])[path]
-    tag = next(line for line in content.splitlines() if line.startswith("mastertag:"))
-    edit = await on.put(
-        f"/api/day1/approvals/{mr['iid']}",
-        json={"files": [{"path": path, "content": content.replace(tag, "mastertag: 4.17.58")}]},
-        headers=auth(support.BOB),
-    )
-    assert edit.status_code == 200, edit.text
+    assert created.status_code == 202, created.text
+    assert "mastertag: 4.18.56-x86_64" in provision.starts[-1]["content"]
 
 
 async def test_a_decision_taken_whose_run_cannot_be_read_again_answers_without_it(

@@ -20,9 +20,20 @@ NEW = "ocp4-prod-falcon-site1"
 REF = ClusterRef("site1", "ocp4-prod-mce-site1-a", NEW)
 
 
+async def merged(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab, request: CreateCluster
+) -> None:
+    """``request``'s file on main, as its provision-cluster run's merged MR leaves it."""
+    rendered = await context.clusters.preview(request)
+    start = {"cluster": NEW, "mce": rendered.ref.mce, "content": rendered.content}
+    await support.provisioned(gitlab, start)
+    context.repos[RepoKey.DAY1].forget_files()
+
+
 async def create_merged(
     context: Day1Context,
     support: Any,
+    gitlab: InMemoryGitLab,
     *,
     spec_name: str = "agent-standard",
     overrides: dict[str, dict[str, object]] | None = None,
@@ -31,24 +42,16 @@ async def create_merged(
     variables = dict(body["variables"])
     if spec_name == "agent-single":
         variables["nodepools"] = support.nodepools("dell-r660-site1-128c-1024gb-5tb")
-    result = await context.clusters.create(
-        CreateCluster(
-            name=NEW,
-            site=body["site"],
-            mce=body["mce"],
-            spec_name=spec_name,
-            spec_version="1.0.0",
-            variables=variables,
-            addon_overrides=overrides or {},
-        ),
-        user=support.ALICE,
+    request = CreateCluster(
+        name=NEW,
+        site=body["site"],
+        mce=body["mce"],
+        spec_name=spec_name,
+        spec_version="1.0.0",
+        variables=variables,
+        addon_overrides=overrides or {},
     )
-    await context.approvals.approve(
-        RepoKey.DAY1,
-        result.merge_request.ref.iid,
-        sha=result.merge_request.sha,
-        approver=support.BOB,
-    )
+    await merged(context, support, gitlab, request)
 
 
 async def test_clusters_without_a_spec_header_are_not_linked(context: Day1Context) -> None:
@@ -59,10 +62,10 @@ async def test_clusters_without_a_spec_header_are_not_linked(context: Day1Contex
 
 
 async def test_a_missing_spec_addon_is_drift_and_carries_the_requested_values(
-    context: Day1Context, support: Any
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     # Legacy: overrides were dropped at create, so "Fix" installed the addon with {}.
-    await create_merged(context, support, overrides={"redbull/cluster-roles": {"a": 1}})
+    await create_merged(context, support, gitlab, overrides={"redbull/cluster-roles": {"a": 1}})
     drift = await context.drift.for_cluster(REF)
     assert drift.state is DriftState.DRIFTED
     assert drift.is_drifted is True
@@ -86,7 +89,7 @@ async def test_an_installed_spec_addon_at_its_version_is_in_sync(
     day2 = FakeDay2Addons({NEW: [InstalledAddon("redbull", "cluster-roles", "main")]})
     app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
     context: Day1Context = app.state.day1
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     assert (await context.drift.for_cluster(REF)).state is DriftState.IN_SYNC
 
 
@@ -96,7 +99,7 @@ async def test_an_addon_at_another_version_is_reported_and_in_sync(
     day2 = FakeDay2Addons({NEW: [InstalledAddon("redbull", "cluster-roles", "2.0.0")]})
     app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
     context: Day1Context = app.state.day1
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     drift = await context.drift.for_cluster(REF)
     assert drift.addon_drift == () and drift.state is DriftState.IN_SYNC
     [difference] = drift.version_differences
@@ -109,7 +112,7 @@ async def test_the_drift_api_shows_a_version_difference_as_information_only(
     # ADR-0025 at the HTTP boundary: dropping the mapping would answer an empty list.
     day2 = FakeDay2Addons({NEW: [InstalledAddon("redbull", "cluster-roles", "2.0.0")]})
     app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
-    await create_merged(app.state.day1, support)
+    await create_merged(app.state.day1, support, gitlab)
     token = app.state.session_tokens.issue(support.VIEWER)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -133,10 +136,10 @@ async def test_the_drift_api_shows_a_version_difference_as_information_only(
 
 
 async def test_day2_down_makes_drift_unknown_not_in_sync(
-    context: Day1Context, support: Any, day2: FakeDay2Addons
+    context: Day1Context, support: Any, day2: FakeDay2Addons, gitlab: InMemoryGitLab
 ) -> None:
     # Legacy: a failed day2 call was caught and reported as is_drifted=False.
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     day2.unavailable = True
     drift = await context.drift.for_cluster(REF)
     assert drift.state is DriftState.UNKNOWN
@@ -150,7 +153,7 @@ async def test_day2_down_makes_drift_unknown_not_in_sync(
 async def test_a_deleted_spec_makes_drift_unknown(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     pid = await support.project_id(gitlab, support.SPECS)
     path = RepoPath("specs/agent-standard.yaml")
     current = await gitlab.read_file(pid, path, "main")
@@ -170,7 +173,7 @@ async def test_an_unreadable_newest_spec_still_measures_the_cluster_against_its_
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     # ADR-0044: the cluster is on v1.0.0, read from history; only a newer version is unknown.
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     await support.push(
         gitlab, support.SPECS, branch="main", file="specs/agent-standard.yaml", content="x: [\n"
     )
@@ -184,17 +187,19 @@ async def test_an_unreadable_newest_spec_still_measures_the_cluster_against_its_
     )
 
 
-async def test_a_spec_without_addons_is_in_sync(context: Day1Context, support: Any) -> None:
-    await create_merged(context, support, spec_name="agent-single")
+async def test_a_spec_without_addons_is_in_sync(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await create_merged(context, support, gitlab, spec_name="agent-single")
     drift = await context.drift.for_cluster(REF)
     assert drift.state is DriftState.IN_SYNC
     assert drift.addon_drift == ()
 
 
 async def test_a_specs_clusters_are_the_ones_its_header_names(
-    context: Day1Context, support: Any
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    await create_merged(context, support)
+    await create_merged(context, support, gitlab)
     assert [d.ref.name for d in await context.drift.for_spec("agent-standard")] == [NEW]
     assert await context.drift.for_spec("agent-single") == []
 
@@ -221,35 +226,29 @@ def linked(flavor: str, version: str = "1.0.0") -> Any:
     return lambda text: f'# specName: "{flavor}"\n# specVersion: "{version}"\n{text}'
 
 
-async def create_dell_merged(context: Day1Context, support: Any, **pool: object) -> None:
+async def create_dell_merged(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab, **pool: object
+) -> None:
     body = support.create_body()
     variables = {
         **body["variables"],
         "nodepools": [{"infra_env": "dell-r660-site1-128c-1024gb-5tb", **pool}],
     }
-    result = await context.clusters.create(
-        CreateCluster(
-            name=NEW,
-            site=body["site"],
-            mce=body["mce"],
-            spec_name="agent-dell",
-            spec_version="1.0.0",
-            variables=variables,
-        ),
-        user=support.ALICE,
+    request = CreateCluster(
+        name=NEW,
+        site=body["site"],
+        mce=body["mce"],
+        spec_name="agent-dell",
+        spec_version="1.0.0",
+        variables=variables,
     )
-    await context.approvals.approve(
-        RepoKey.DAY1,
-        result.merge_request.ref.iid,
-        sha=result.merge_request.sha,
-        approver=support.BOB,
-    )
+    await merged(context, support, gitlab, request)
 
 
 async def test_a_cluster_as_its_flavor_made_it_is_in_sync_and_presets_never_drift(
-    context: Day1Context, support: Any
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    await create_dell_merged(context, support, replicas=5)  # replicas are a preset
+    await create_dell_merged(context, support, gitlab, replicas=5)  # replicas are a preset
     drift = await context.drift.for_cluster(REF)
     assert drift.state is DriftState.IN_SYNC
     assert drift.value_drift == ()
@@ -258,7 +257,7 @@ async def test_a_cluster_as_its_flavor_made_it_is_in_sync_and_presets_never_drif
 async def test_a_later_edit_that_changes_a_locked_value_is_drift(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    await create_dell_merged(context, support)
+    await create_dell_merged(context, support, gitlab)
     await rewrite(
         context,
         support,

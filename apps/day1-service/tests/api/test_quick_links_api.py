@@ -17,6 +17,7 @@ from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.settings import Environment, GitBackend, RuntimeSettings
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.main import Adapters, create_app
 
 Auth = Callable[[User], dict[str, str]]
@@ -52,7 +53,9 @@ async def call(
         settings=support.make_settings(**values),
         auth=support.make_auth(),
         runtime=RuntimeSettings(environment=Environment.TEST, git_backend=GitBackend.FAKE),
-        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons({})),
+        adapters=Adapters(
+            gitlab=gitlab, day2=FakeDay2Addons({}), provision=FakeProvisionWorkflow()
+        ),
         clock=clock,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)

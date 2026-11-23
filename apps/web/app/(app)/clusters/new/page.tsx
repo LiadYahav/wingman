@@ -2,7 +2,6 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, Info, List, Plus, RotateCcw, Sparkles, Trash2,
@@ -11,7 +10,6 @@ import jsYaml from "js-yaml";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
-import { approvalHref } from "@/lib/approvals";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -31,7 +29,6 @@ import type {
 } from "@/types";
 import { ProvisionRunPanel } from "@/components/clusters/provision-run";
 import { MCEPlacementPanel, PlacementRule } from "@/components/clusters/mce-placement";
-import { isProvisionRun, useProvisioner } from "@/lib/provision";
 import { useDebounced } from "@/hooks/use-debounced";
 import {
   PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, usePlacement,
@@ -545,7 +542,6 @@ type OverrideMode = "fields" | "yaml";
 // eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function NewClusterPage() {
   const isAdmin = useIsAdmin();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const errorRef = useRef<HTMLDivElement>(null);
   // The visible labels name the site, MCE and version controls
@@ -818,29 +814,17 @@ export default function NewClusterPage() {
     onError: (error) => showFailure(error, "preview"),
   });
 
-  // What Create does here: Wingman's merge request, or the provision-cluster workflow (ADR-0042)
-  const { data: provisioner } = useProvisioner();
-  const byWorkflow = provisioner?.mode === "workflow";
+  // A create starts the platform's provision-cluster workflow, which opens the merge request (ADR-0042)
   const [startedRun, setStartedRun] = useState<ProvisionRun | null>(null);
 
   const createMutation = useMutation({
     mutationFn: (request: CreateClusterRequest) => day1Api.clusters.create(request),
-    onSuccess: (result) => {
+    onSuccess: (run) => {
       setReviewed(null);
-      if (isProvisionRun(result)) {
-        toast.success(`provision-cluster started for ${result.cluster}`, {
-          description: "The workflow reserves the segment and opens the merge request; follow it here.",
-        });
-        setStartedRun(result);
-        return;
-      }
-      const mr = result;
-      toast.success(`MR !${mr.iid} opened: ${mr.title}`, {
-        description: "CI and the allocate-segment workflow add their keys to its branch; another admin approves it after.",
+      toast.success(`provision-cluster started for ${run.cluster}`, {
+        description: "The workflow reserves the segment and opens the merge request; follow it here.",
       });
-      setReviewed(null);
-      queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all });
-      router.push(approvalHref(mr));
+      setStartedRun(run);
     },
     onError: (error) => {
       setReviewed(null);
@@ -858,7 +842,7 @@ export default function NewClusterPage() {
     );
   }
 
-  // Workflow mode: the cluster has no file until the workflow's merge request is merged, so its run is shown here
+  // The cluster has no file until the workflow's merge request is merged, so its run is shown here
   if (startedRun) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
@@ -1740,14 +1724,10 @@ export default function NewClusterPage() {
         open={reviewed !== null}
         onOpenChange={(open) => { if (!open) setReviewed(null); }}
         title="Review: Create Cluster"
-        description={
-          byWorkflow
-            ? "This is the file the provision-cluster workflow receives. It reserves the segment, adds vlanId and dhcp_values, pushes the file on its own branch and opens the merge request; a person merges it."
-            : "This is the file the merge request adds. After it is pushed, CI and the allocate-segment workflow commit mcConfigMap, vlanId and dhcp_values to the branch; approve once they have."
-        }
+        description="This is the file the provision-cluster workflow receives. It reserves the segment, adds vlanId and dhcp_values, pushes the file on its own branch and opens the merge request; a person merges it."
         onConfirm={() => reviewed && createMutation.mutate(reviewed.request)}
         isPending={createMutation.isPending}
-        confirmLabel={byWorkflow ? "Confirm — Start provision-cluster" : "Confirm — Create Cluster MR"}
+        confirmLabel="Confirm — Start provision-cluster"
       >
         {reviewed && (
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3 text-sm font-mono">

@@ -36,6 +36,8 @@ SHARED = {"wingman-config", "wingman-secrets"}
 # The services' Deployments, whose containers' `env` entries count too. The web's
 # (NODE_ENV, for Next.js) is not one of them: no settings class reads it.
 SERVICES = {"wingman-day1", "wingman-day2"}
+# A development install without the orchestrator: the one place the chart allows none.
+NO_ORCHESTRATOR = ["--set", "environment=development", "--set", "workflows.url="]
 # Every optional setting the chart sets with an `if`, and the values that turn it on.
 ALL_ON = [
     arg
@@ -156,10 +158,18 @@ def test_a_server_scan_with_auth_off_gets_no_token() -> None:
 
 def test_values_kept_from_a_release_before_3_4_still_render() -> None:
     """``helm upgrade --reuse-values`` from 3.3 has no ``serverScan``, ``workflows`` or
-    ``segmentsManager`` map."""
+    ``segmentsManager`` map: production needs ``workflows.url`` now (ADR-0042), so they
+    fail naming it, and render in development."""
     old = ["--set", "serverScan=null", "--set", "workflows=null", "--set", "segmentsManager=null"]
+    refused = template(*old)
+    assert refused.returncode != 0
+    assert "workflows.url is required" in refused.stderr
     prefixes = ("SERVER_SCAN_", "WORKFLOWS_", "SEGMENTS_MANAGER_")
-    new = {v for v in chart_variables(*old) if v.startswith(prefixes)}
+    new = {
+        v
+        for v in chart_variables(*old, "--set", "environment=development")
+        if v.startswith(prefixes)
+    }
     assert not new
     reused = [
         *ALL_ON,
@@ -209,17 +219,20 @@ def test_placement_needs_70_free_pods_unless_set_also_for_values_kept_from_3_7()
         assert on["PLACEMENT_MIN_FREE_PODS"] == value
 
 
-def test_creates_open_merge_requests_unless_the_workflow_is_chosen() -> None:
-    """ADR-0042: ``day1.provisioner`` defaults to merge-request, also for values kept from
-    3.6 that have no such key; ``workflow`` needs ``workflows.url``."""
-    assert render()["wingman-config"]["data"]["DAY1_PROVISIONER"] == "merge-request"
-    kept = render("--set", "day1.provisioner=null")["wingman-config"]["data"]
-    assert kept["DAY1_PROVISIONER"] == "merge-request"
-    on = render(*ALL_ON, "--set", "day1.provisioner=workflow")["wingman-config"]["data"]
-    assert on["DAY1_PROVISIONER"] == "workflow"
-    refused = template("--set", "day1.provisioner=workflow")
+def test_creates_need_the_orchestrator_and_the_dropped_provisioner_changes_nothing() -> None:
+    """ADR-0042, amended 2026-11-23: every create starts provision-cluster, so the chart
+    refuses an empty ``workflows.url`` outside development; ``day1.provisioner`` (3.7.0 to
+    3.53), any value, renders nothing and nothing reads DAY1_PROVISIONER."""
+    config = render()["wingman-config"]["data"]
+    assert config["WORKFLOWS_API_URL"] == "http://workflows-orchestrator-api.ns.svc:8080"
+    refused = template("--set", "workflows.url=")
     assert refused.returncode != 0
-    assert "day1.provisioner workflow needs workflows.url" in refused.stderr
+    assert "workflows.url is required" in refused.stderr
+    assert "WORKFLOWS_API_URL" not in render(*NO_ORCHESTRATOR)["wingman-config"]["data"]
+    for value in ("merge-request", "workflow", "null"):
+        assert render("--set", f"day1.provisioner={value}") == render()
+    assert "DAY1_PROVISIONER" not in config
+    assert "DAY1_PROVISIONER" not in env_names(Day1Settings)
 
 
 def test_upgrades_are_off_unless_turned_on_also_for_values_kept_from_3_15() -> None:
@@ -234,7 +247,7 @@ def test_upgrades_are_off_unless_turned_on_also_for_values_kept_from_3_15() -> N
     assert on["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
     reused = render(*ALL_ON, "--set", "workflows.targetsTimeoutSeconds=null")
     assert reused["wingman-config"]["data"]["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
-    refused = template("--set", "day1.upgrades.enabled=true")
+    refused = template(*NO_ORCHESTRATOR, "--set", "day1.upgrades.enabled=true")
     assert refused.returncode != 0
     assert "day1.upgrades.enabled needs workflows.url" in refused.stderr
 
@@ -247,7 +260,7 @@ def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> No
     assert kept["DAY1_ADD_SERVERS"] == "false"
     on = render(*ALL_ON, "--set", "day1.addServers.enabled=true")["wingman-config"]["data"]
     assert on["DAY1_ADD_SERVERS"] == "true"
-    refused = template("--set", "day1.addServers.enabled=true")
+    refused = template(*NO_ORCHESTRATOR, "--set", "day1.addServers.enabled=true")
     assert refused.returncode != 0
     assert "day1.addServers.enabled needs workflows.url" in refused.stderr
 
@@ -260,18 +273,20 @@ def test_scaling_nodepools_is_on_by_default_wherever_the_orchestrator_is() -> No
     """ADR-0062's 2026-11-23 amendment: ``day1.scaleNodepools.enabled`` is true by default, and
     DAY1_SCALE_NODEPOOLS is on wherever ``workflows.url`` is set, also for values kept from a
     release before 3.40 that have no such key; false turns it off. Without ``workflows.url``
-    there is no Scale and nothing fails, whatever the value says. Not a boolean, the schema
-    refuses it."""
+    (development only, ADR-0042) there is no Scale and nothing fails, whatever the value
+    says. Not a boolean, the schema refuses it."""
     assert scale(*ALL_ON) == "true"
+    assert scale() == "true", "the default install has the orchestrator it requires"
     assert scale(*ALL_ON, "--set", "day1.scaleNodepools=null") == "true"
     assert scale(*ALL_ON, "--set", "day1.scaleNodepools.enabled=true") == "true"
     assert scale(*ALL_ON, "--set", "day1.scaleNodepools.enabled=false") == "false"
-    assert scale() == "false", "the default install without the orchestrator renders, no Scale"
-    assert scale("--set", "day1.scaleNodepools.enabled=true") == "false"
-    assert scale("--set", "day1.scaleNodepools=null") == "false"
-    for no_orchestrator in ((), ("--set", "workflows=null"), ("--set", "workflows.url=")):
-        assert template(*no_orchestrator).returncode == 0
-        assert scale(*no_orchestrator) == "false"
+    assert scale(*NO_ORCHESTRATOR) == "false", "development without the orchestrator: no Scale"
+    assert scale(*NO_ORCHESTRATOR, "--set", "day1.scaleNodepools.enabled=true") == "false"
+    assert scale(*NO_ORCHESTRATOR, "--set", "day1.scaleNodepools=null") == "false"
+    for empty in (("--set", "workflows=null"), ("--set", "workflows.url=")):
+        development = ("--set", "environment=development", *empty)
+        assert template(*development).returncode == 0
+        assert scale(*development) == "false"
     wrong = template(*ALL_ON, "--set-string", "day1.scaleNodepools.enabled=yes")
     assert wrong.returncode != 0
     assert "scaleNodepools" in wrong.stderr

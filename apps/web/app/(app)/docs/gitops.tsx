@@ -7,15 +7,16 @@ export function GitOpsSection() {
     <section>
       <SectionHeader id="gitops" icon={GitBranch} title="GitOps Workflow" subtitle="Every action in Wingman is a Git commit" />
       <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-        Wingman never applies changes directly. Every create, edit or delete writes files as one commit on a
-        new branch and opens a merge request. This means:
+        Wingman never applies changes directly. Every edit or delete writes files as one commit on a new branch
+        and opens a merge request; a create hands the file to the provision-cluster workflow, which does the same.
+        This means:
       </p>
       <div className="space-y-3 mb-5">
         {[
           { icon: GitPullRequest, text: "Peer review is built in: another admin reviews the diff and approves it. Nobody approves their own change." },
           { icon: ClipboardList, text: "Full audit trail: every change is a commit that names the person who asked for it." },
           { icon: RefreshCw, text: "Rollback is a revert: revert the merge in GitLab, and ArgoCD applies the revert like any other change." },
-          { icon: Shield, text: "Other writers are respected: the allocate-segment workflow and the day1 CI commit to cluster MR branches. A Wingman edit or approval based on an older read is refused instead of overwriting them." },
+          { icon: Shield, text: "Other writers are respected: the day1 CI commits to cluster MR branches, and the platform's workflows to theirs and to main. A Wingman edit or approval based on an older read is refused instead of overwriting them." },
         ].map(({ icon: Icon, text }) => (
           <div key={text} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
             <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />

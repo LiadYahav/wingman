@@ -51,7 +51,7 @@ export function OverviewSection() {
         <FeatureCard
           icon={Workflow}
           title="Platform Workflows"
-          description="With the platform's workflows orchestrator: scale a NodePool and uninstall a server; where your operator turns them on, create through provision-cluster, upgrade a cluster, install servers into an MCE's pool. Wingman starts the platform's workflow and shows its run in the workflow's own words."
+          description="With the platform's workflows orchestrator: create through provision-cluster, scale a NodePool and uninstall a server; where your operator turns them on, upgrade a cluster, install servers into an MCE's pool. Wingman starts the platform's workflow and shows its run in the workflow's own words."
         />
         <FeatureCard
           icon={Server}
@@ -88,11 +88,10 @@ export function OverviewSection() {
       </div>
 
       <Callout type="info" title="How a new cluster is proposed">
-        By default Wingman opens the merge request itself: the day1 CI runs the allocate-segment workflow on the MR
-        branch, and a person&apos;s merge is the approval. Your operator can switch creates to the platform&apos;s{" "}
-        <InlineCode>provision-cluster</InlineCode> workflow (<InlineCode>DAY1_PROVISIONER=workflow</InlineCode>): Wingman
-        then hands it the same file, and the workflow reserves the segment and opens the merge request. Either way
-        the cluster is built only once a person merges. See{" "}
+        Wingman renders and checks the new cluster&apos;s file and hands it to the platform&apos;s{" "}
+        <InlineCode>provision-cluster</InlineCode> workflow, which reserves the segment, adds{" "}
+        <InlineCode>vlanId</InlineCode> and <InlineCode>dhcp_values</InlineCode> and opens the merge request. A
+        person&apos;s merge is the approval: the cluster is built only once a person merges. See{" "}
         <a href="#cluster-workflows" className="text-primary hover:underline">Cluster Workflows</a>.
       </Callout>
     </section>

@@ -18,10 +18,10 @@ get the same pick, and both are accepted.
 Placement always runs. Without live MCE reads (``CLUSTER_STATUS_ENABLED``
 off) it decides on Git and server-scan alone: the free pods, the servers of
 each node type and the hub read are ``not_checked``, which does not block a
-pick, and the form and the merge request say so (ADR-0050's amendment). An admin may choose another
-candidate that passes every check, with a reason; the choice is checked
-again at create (:func:`admit`). Everything here is pure: the counts come in
-as :class:`McePicture`.
+pick, and the form says so (ADR-0050's amendment). An admin may choose
+another candidate that passes every check, with a reason; the choice is
+checked again at create (:func:`admit`) and logged (``placement_log``).
+Everything here is pure: the counts come in as :class:`McePicture`.
 """
 
 from __future__ import annotations
@@ -485,106 +485,3 @@ def admit(placement: Placement, chosen: str, choice: Choice | None) -> Admission
         f"Choosing {chosen} over Wingman's pick {pick} needs a reason",
         [f"placement.reason: say why {chosen} and not {pick} ({placement.why})"],
     )
-
-
-# ── The merge request's record ───────────────────────────────────────────────
-
-
-def _cell(value: int | None) -> str:
-    return "unknown" if value is None else str(value)
-
-
-def _servers_cell(node_types: Sequence[NodeTypeSupply]) -> str:
-    if not node_types:
-        return "—"
-    return ", ".join(f"{t.infra_env} {_cell(t.healthy)}/{t.needed}" for t in node_types).replace(
-        "|", "/"
-    )
-
-
-def _checks_cell(candidate: Candidate) -> str:
-    unchecked = (
-        f" ({', '.join(str(c).replace('_', ' ') for c in candidate.not_checked)} not checked)"
-        if candidate.not_checked
-        else ""
-    )
-    if candidate.eligible:
-        return f"pass{unchecked}"
-    failed = "; ".join(
-        c.detail.rstrip(".")
-        for c in candidate.checks
-        if c.status not in (Status.PASS, Status.NOT_CHECKED)
-    )
-    return f"not offered: {failed}{unchecked}".replace("|", "/")
-
-
-def describe_placement(admission: Admission) -> str:
-    """The "MCE placement" section of a create's merge request: the choice, the inputs, the numbers.
-
-    The reason is an admin's free text: it goes in a code span, so it can
-    neither format the description nor mention anyone.
-    """
-    placement = admission.placement
-    inputs = placement.inputs
-    lines = ["### MCE placement", ""]
-    if admission.override:
-        reason = (admission.reason or "").replace("`", "'")
-        lines += [
-            f"An admin chose `{admission.chosen}` over Wingman's pick `{placement.pick}`. "
-            f"Reason: `{reason}`",
-            "",
-            f"Wingman's pick: {placement.why}",
-        ]
-    else:
-        lines.append(f"Wingman picked `{admission.chosen}`: {placement.why}")
-    if not placement.live_reads:
-        lines += [
-            "",
-            "Free pods and servers were **not checked**: live MCE reads are off "
-            "(`CLUSTER_STATUS_ENABLED=false`). Wingman decided on the day1 repo and "
-            "server-scan only.",
-        ]
-    lines += [
-        "",
-        f"Site `{inputs.site}`, {inputs.env}, OpenShift {inputs.version or '?'}, owner "
-        f"{inputs.owner or 'not given'}, flavor `{inputs.flavor or '?'}`; a new cluster needs "
-        f"{inputs.min_free_pods} free pods"
-        + (
-            " and "
-            + ", ".join(f"{count} `{infra_env}`" for infra_env, count in inputs.needs)
-            + " servers."
-            if inputs.needs
-            else "."
-        ),
-        "",
-        "| MCE | Owner's clusters | Clusters | Usable spare (of all) | Free pods | "
-        "Healthy free servers / needed | Checks |",
-        "|---|---:|---:|---:|---:|---|---|",
-    ]
-    for candidate in placement.candidates:
-        picture = candidate.picture
-        marks = [
-            m
-            for m, on in (("pick", candidate.picked), ("chosen", candidate.mce == admission.chosen))
-            if on
-        ]
-        name = f"`{picture.mce}`" + (f" ({', '.join(marks)})" if marks else "")
-        spare = (
-            "unknown"
-            if picture.spare is None
-            else f"{picture.spare.usable} ({picture.spare.total})"
-        )
-        free = (
-            "not checked"
-            if not picture.live
-            else "unknown"
-            if picture.pods is None
-            else str(picture.pods.free)
-        )
-        owner = "—" if inputs.owner is None else _cell(picture.owner_clusters)
-        checks = _checks_cell(candidate)
-        servers = _servers_cell(picture.node_types) if picture.live else "not checked"
-        lines.append(
-            f"| {name} | {owner} | {picture.clusters} | {spare} | {free} | {servers} | {checks} |"
-        )
-    return "\n".join(lines)

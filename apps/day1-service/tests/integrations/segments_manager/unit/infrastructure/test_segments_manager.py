@@ -195,7 +195,7 @@ def test_the_demo_ledger_agrees_with_the_fixture_clusters_but_herzi() -> None:
         dhcp = values.get("dhcp_values") or {}
         if "network" not in dhcp:
             continue
-        assert "vlanId" in values, f"{path.name}: allocate-segment writes vlanId with dhcp_values"
+        assert "vlanId" in values, f"{path.name}: a workflow writes vlanId with dhcp_values"
         file = file_network(values["vlanId"], dhcp["network"])
         assert file.segment is not None
         record = records[file.segment]

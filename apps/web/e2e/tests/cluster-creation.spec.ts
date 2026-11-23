@@ -11,7 +11,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 import { injectAdminAuth, mockDashboardApis, mockPlacement } from "../fixtures/api-handlers";
 import { ClusterNewPage } from "../pages/cluster-new.page";
 import type {
-  ClusterPreview, CreateClusterRequest, MRDetail, Mce, Problem, SpecEntry, TemplateField,
+  ClusterPreview, CreateClusterRequest, Mce, Problem, ProvisionRun, SpecEntry, TemplateField,
 } from "../../types";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -109,23 +109,15 @@ const PREVIEW: ClusterPreview = {
   path: "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-herzi-site1.yaml",
 };
 
-const MR: MRDetail = {
-  iid: 7,
-  project_id: 1,
-  title: "[Wingman/Day1] Create cluster ocp4-prod-herzi-site1",
-  description: "Creating hosted cluster",
-  author: { username: "test-admin", name: "test-admin", avatar_url: "" },
-  state: "opened",
-  created_at: "2026-11-07T10:00:00Z",
-  updated_at: "2026-11-07T10:00:00Z",
-  merged_at: null,
-  web_url: "https://gitlab.example.com/gitops-day1/platform-config/-/merge_requests/7",
-  source_branch: "wingman/day1/create-cluster-ocp4-prod-herzi-site1",
-  target_branch: "main",
-  labels: ["wingman"],
-  repo: "day1",
-  has_conflicts: false,
-  sha: "0c904bfafde4c4ed24416190ea224ee25cdcf738",
+/** What a create answers: the provision-cluster run it started (ADR-0042). */
+const RUN: ProvisionRun = {
+  workflow_id: "provision-cluster-ocp4-prod-herzi-site1",
+  cluster: "ocp4-prod-herzi-site1",
+  status: "running",
+  phase: "inspecting-target",
+  error: null,
+  merge_request_url: null,
+  merge_request_state: null,
 };
 
 function problem(status: number, code: Problem["code"], detail: string, details: Problem["details"] = {}): Problem {
@@ -182,13 +174,13 @@ async function setup(
   await page.route("**/api/day1/clusters", (r) => {
     if (r.request().method() !== "POST") return json(r, []);
     calls.creates.push(r.request().postDataJSON());
-    return json(r, MR, 201);
+    return json(r, RUN, 202);
   });
+  await page.route("**/api/day1/clusters/*/provision-run", (r) => json(r, RUN));
   await page.route("**/api/day1/clusters/preview", (r) => {
     calls.previews.push(r.request().postDataJSON());
     return preview ? preview(r) : json(r, PREVIEW);
   });
-  await page.route("**/api/day1/approvals/7**", (r) => json(r, { mr: MR, diffs: [] }));
   return calls;
 }
 
@@ -424,7 +416,7 @@ test.describe("Cluster create form", () => {
     await expect(form.reviewDialog).toContainText("replicas: 3");
 
     await form.confirm();
-    await page.waitForURL("**/approvals/day1-7");
+    await expect(page.getByTestId("provision-run")).toContainText("ocp4-prod-herzi-site1");
 
     expect(calls.creates).toHaveLength(1);
     const body = calls.creates[0];

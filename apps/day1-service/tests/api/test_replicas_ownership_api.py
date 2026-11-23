@@ -25,6 +25,7 @@ from wingman_day1.domain.replicas_ownership import REPLICAS_BY_SCALE
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.infrastructure.fake_scale import FakeScaleWorkflow
 
 Auth = Callable[[User], dict[str, str]]
@@ -67,6 +68,7 @@ def scaling(
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: Any,
+    provision: FakeProvisionWorkflow,
 ) -> FastAPI:
     return support.build_app(
         gitlab=gitlab,
@@ -75,6 +77,7 @@ def scaling(
         day2=day2,
         clock=clock,
         scale=FakeScaleWorkflow(clock=clock),
+        provision=provision,
         **ORCHESTRATOR,
     )
 
@@ -180,7 +183,7 @@ async def test_on_an_edit_may_add_a_nodepool_with_replicas_or_remove_one(
     assert removed.status_code == 200, removed.text
 
 
-async def test_a_review_edit_is_held_to_main_and_a_create_is_not(
+async def test_a_review_edit_is_held_to_main(
     on: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     alice, bob = auth(support.ALICE), auth(support.BOB)
@@ -199,18 +202,15 @@ async def test_a_review_edit_is_held_to_main_and_a_create_is_not(
     assert (edit.status_code, edit.json()["code"]) == (422, "VALIDATION_ERROR")
     assert edit.json()["details"]["problems"] == [REFUSED]
 
-    created = await on.post("/api/day1/clusters", json=support.create_body(), headers=alice)
-    assert created.status_code == 201, created.text
-    new = created.json()
-    new_path = f"{HOSTED}/ocp4-prod-falcon-site1.yaml"
-    text = gitlab.snapshot(pid, new["source_branch"])[new_path]
-    assert "replicas: 2" in text  # a create sets the first replicas
-    review = await on.put(
-        f"/api/day1/approvals/{new['iid']}",
-        json={"files": [{"path": new_path, "content": text.replace("replicas: 2", "replicas: 7")}]},
-        headers=bob,
+
+async def test_a_create_sets_the_first_replicas(
+    on: httpx.AsyncClient, auth: Auth, support: Any, provision: FakeProvisionWorkflow
+) -> None:
+    created = await on.post(
+        "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
     )
-    assert review.status_code == 200, review.text
+    assert created.status_code == 202, created.text
+    assert "replicas: 2" in provision.starts[-1]["content"]
 
 
 # ── A change Wingman writes ──────────────────────────────────────────────────

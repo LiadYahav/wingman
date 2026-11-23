@@ -12,7 +12,6 @@ from wingman_day1.domain.cluster_file import (
     AUTOMATION_KEYS,
     PATH_KEYS,
     Provenance,
-    describe_for_review,
     edit_problems,
     load_values,
     read_provenance,
@@ -361,16 +360,3 @@ def test_read_values_is_lenient_about_odd_shapes() -> None:
 
 def test_read_values_of_a_non_list_nodepool_is_no_nodepools() -> None:
     assert read_values({"nodepool": "x"}).nodepools == ()
-
-
-def test_describe_for_review_lists_each_nodepool() -> None:
-    text = describe_for_review(read_values(load_values(VALID)))
-    assert "- mastertag: `4.18.22-x86_64`" in text
-    assert "- platform: `agent`" in text
-    assert (
-        "- nodepool `dell-r660-site1-128c-1024gb-5tb`: InfraEnv "
-        "`dell-r660-site1-128c-1024gb-5tb`, 2 replicas, configs: worker-kubeletconfig-reserved"
-    ) in text
-    sparse = describe_for_review(read_values({"nodepool": [{"name": "zone-a"}]}))
-    assert "- mastertag: `(none)`" in sparse
-    assert "nodepool `zone-a`: InfraEnv `None`, 1 replicas, configs: none" in sparse

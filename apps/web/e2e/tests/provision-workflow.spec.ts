@@ -1,9 +1,9 @@
 /**
  * Creating a cluster through the platform's provision-cluster workflow
- * (docs/notes/2026-11-12-provision-cluster-workflow-api.md, ADR-0042). With
- * the mode on, Create starts the workflow and the page shows its run: the
- * workflow's own phase, its merge request once opened, and its error. With it
- * off, nothing changes. Every API is mocked.
+ * (docs/notes/2026-11-12-provision-cluster-workflow-api.md, ADR-0042), the only
+ * way Wingman creates one: Create starts the workflow and the page shows its
+ * run: the workflow's own phase, its merge request once opened, and its
+ * error. Every API is mocked.
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
@@ -77,11 +77,10 @@ const problem = (status: number, code: string, detail: string, details: Record<s
   instance: "/api/day1/clusters", request_id: "req_1", details,
 });
 
-/** The create form's reads, with Create in `mode`. */
-async function setup(page: Page, mode: "merge-request" | "workflow") {
+/** The create form's reads. */
+async function setup(page: Page) {
   await injectAdminAuth(page);
   await mockDashboardApis(page);
-  await page.route("**/api/day1/clusters/provisioner", (r) => json(r, { mode }));
   await page.route("**/api/day1/specs", (r) => json(r, [RCS]));
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
   await page.route("**/api/day1/sites", (r) => json(r, ["site1"]));
@@ -116,7 +115,7 @@ async function review(page: Page) {
 
 test.describe("Create through the provision-cluster workflow", () => {
   test("Create starts the workflow and the page follows its run to the merge request", async ({ page }) => {
-    await setup(page, "workflow");
+    await setup(page);
     const creates: unknown[] = [];
     await page.route("**/api/day1/clusters", (r) => {
       if (r.request().method() !== "POST") return r.fallback();
@@ -129,7 +128,7 @@ test.describe("Create through the provision-cluster workflow", () => {
       run({
         phase: "awaiting-merge",
         merge_request_url: "https://gitlab.example/gitops-day1/platform-config/-/merge_requests/42",
-        merge_request_state: "opened",
+        merge_request_state: "open",
       }),
     ];
     await page.route(`**/api/day1/clusters/${NAME}/provision-run`, (r) => json(r, reads.shift() ?? reads.at(-1) ?? run()));
@@ -150,11 +149,11 @@ test.describe("Create through the provision-cluster workflow", () => {
     await expect(page.getByTestId("provision-run-phase")).toHaveText("Awaiting merge", { timeout: 15_000 });
     const link = page.getByTestId("provision-run-merge-request");
     await expect(link).toHaveAttribute("href", "https://gitlab.example/gitops-day1/platform-config/-/merge_requests/42");
-    await expect(link).toContainText("Review it (opened)");
+    await expect(link).toContainText("Review it (open)");
   });
 
   test("a failed run shows the workflow's own error", async ({ page }) => {
-    await setup(page, "workflow");
+    await setup(page);
     await page.route("**/api/day1/clusters", (r) =>
       r.request().method() === "POST" ? json(r, run(), 202) : r.fallback()
     );
@@ -178,7 +177,7 @@ test.describe("Create through the provision-cluster workflow", () => {
   });
 
   test("a run already going and a lost answer are said plainly, and nothing is shown as started", async ({ page }) => {
-    await setup(page, "workflow");
+    await setup(page);
     let call = 0;
     await page.route("**/api/day1/clusters", (r) => {
       if (r.request().method() !== "POST") return r.fallback();
@@ -196,12 +195,5 @@ test.describe("Create through the provision-cluster workflow", () => {
     await dialog.getByRole("button", { name: "Confirm — Start provision-cluster" }).click();
     await expect(page.getByText(/may have started/).first()).toBeVisible();
     await expect(page.getByTestId("provision-run")).toHaveCount(0);
-  });
-
-  test("with the workflow off, Create still opens Wingman's merge request", async ({ page }) => {
-    await setup(page, "merge-request");
-    const dialog = await review(page);
-    await expect(dialog).toContainText("This is the file the merge request adds");
-    await expect(dialog.getByRole("button", { name: "Confirm — Create Cluster MR" })).toBeVisible();
   });
 });

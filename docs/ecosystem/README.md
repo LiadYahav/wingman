@@ -4,7 +4,7 @@ What we learned on 2026-11-07 when we re-read the platform the team built over t
 
 > **Day1 status on 2026-11-07: there is no Day1 (create-cluster) workflow yet. It is planned and in progress.** Nothing about it exists in code, queues or the orchestrator API. Only the design exists (see [Day1 workflow: planned](#day1-workflow-planned-not-built)).
 >
-> **Since then:** the day1 workflow exists as `provision-cluster`, and Wingman's Create can start it, behind `DAY1_PROVISIONER=workflow`, off by default (2026-11-12, ADR-0042). Wingman also starts `upgrade-cluster` (2026-11-13, ADR-0055) and other platform workflows, and reads server-scan and segments-manager for its own pages; an admin's top bar links to each one's own UI (2026-11-23). This page stays the 2026-11-07 picture; Wingman as it is today is [`../architecture.md`](../architecture.md).
+> **Since then:** the day1 workflow exists as `provision-cluster`. Wingman's Create could start it behind a setting from 2026-11-12, and since 3.56.0 every create starts it: Wingman opens no create merge request of its own (ADR-0042). Wingman also starts `upgrade-cluster` (2026-11-13, ADR-0055) and other platform workflows, and reads server-scan and segments-manager for its own pages; an admin's top bar links to each one's own UI (2026-11-23). This page stays the 2026-11-07 picture; Wingman as it is today is [`../architecture.md`](../architecture.md).
 
 ## TL;DR
 
@@ -61,7 +61,7 @@ This flow is git plus CI, not one workflow.
 | 5 | HyperShift brings up the control plane. NodePools claim Agents from the InfraEnv, and herzi tops the pool up | HyperShift, herzi | Automated (where herzi is live) |
 | 6 | **Delete:** remove the file through an MR. In the sandbox chart a PostDelete hook runs `release-segment`. **The production chart has no such hook, so the segment is never released** | A person + hook | Partly |
 
-> **Step 2 since 2026-11-11** (workflows `ff1aba7`): `allocate-segment` takes `{cluster, site, type}`, refuses `values_branch` (422) and writes nothing to the day1 repo. `provision-cluster` allocates the segment and publishes the file with `vlanId` and `dhcp_values` on its own branch; the workflows' guide for the air-gap removes the CI's allocate call, and the GitHub day1 mirror dropped it. A file pushed by hand, or by Wingman's default merge request, gets no VLAN there ([notes/team-repos-2026-11-23.md](notes/team-repos-2026-11-23.md) §3).
+> **Step 2 since 2026-11-11** (workflows `ff1aba7`): `allocate-segment` takes `{cluster, site, type}`, refuses `values_branch` (422) and writes nothing to the day1 repo. `provision-cluster` allocates the segment and publishes the file with `vlanId` and `dhcp_values` on its own branch; the workflows' guide for the air-gap removes the CI's allocate call, and the GitHub day1 mirror dropped it. A file pushed by hand gets no VLAN there, and neither did one from Wingman's own create merge request ([notes/team-repos-2026-11-23.md](notes/team-repos-2026-11-23.md) §3), which 3.56.0 removed: every Wingman create starts `provision-cluster` (ADR-0042's 2026-11-23 amendment).
 
 **Manual or unowned today:**
 - choosing parameters and writing the file
@@ -77,7 +77,7 @@ This flow is git plus CI, not one workflow.
 
 ### Day1 workflow: planned, not built
 
-- **Since then (2026-11-12):** built as `provision-cluster`, started through the orchestrator (`POST /workflows/cluster-lifecycle/provision-cluster`). It takes the cluster file, reserves the segment, pushes the file with the allocation on its own branch, opens the merge request, waits for the merge, then registers the cluster in day2's sig repos. It only creates. Wingman starts it behind `DAY1_PROVISIONER=workflow`, off by default (ADR-0042, [`../notes/2026-11-12-provision-cluster-workflow-api.md`](../notes/2026-11-12-provision-cluster-workflow-api.md)). Wingman starts no delete workflow yet: ADR-0033's contract waits for one. The rest of this section is the 2026-11-07 picture.
+- **Since then (2026-11-12):** built as `provision-cluster`, started through the orchestrator (`POST /workflows/cluster-lifecycle/provision-cluster`). It takes the cluster file, reserves the segment, pushes the file with the allocation on its own branch, opens the merge request, waits for the merge, then registers the cluster in day2's sig repos. It only creates. Every Wingman create starts it since 3.56.0 (ADR-0042, [`../notes/2026-11-12-provision-cluster-workflow-api.md`](../notes/2026-11-12-provision-cluster-workflow-api.md)). Wingman starts no delete workflow yet: ADR-0033's contract waits for one. The rest of this section is the 2026-11-07 picture.
 - **Status:** no code, task queue or API route. We checked the live orchestrator API on 2026-11-07, and the user confirmed the work is in progress.
 - **Planned in the workflows repo:**
   - `create-cluster` (`workflows/CLAUDE.md:818-843`, `shared/models/segment_lifecycle.py:287,365`): runs `allocate-segment` as a child workflow, merges after it returns, then checks the DHCP scope after the merge.
@@ -131,8 +131,8 @@ nodepool:
 - `imageContentSources`, `disableIdmsMerge` (a flavor's image mirrors, ADR-0063), `workertag`, `pausedUntil`
 
 **Written only by automation. Wingman must never write these:**
-- `vlanId`, `dhcp_values` (the allocate-segment workflow)
-- `mcFiles`, `mcConfigMap` (CI)
+- `vlanId`, `dhcp_values` (the provision-cluster workflow since 2026-11-11; before, allocate-segment on the MR branch)
+- `mcFiles`, `mcConfigMap`, `tuningConfigmap` (CI)
 - Secrets
 
 **Set at the MCE or global level, not per cluster:**
@@ -164,7 +164,7 @@ All of these are registered in `workflow_domains/main_worker_init.py` and routed
 | Segments (hub worker) | `initialize-segment` | Create a segment in segments-manager |
 | | `allocate-segment` `{cluster, site, type=HC}` | Reserve an HC VLAN and verify it; since 2026-11-11 it writes nothing to the day1 repo (`values_branch` is a 422), and runs as `provision-cluster`'s child. Run id `allocate-segment-HC-<cluster>` |
 | | `release-segment` `{cluster}` | Delete a leftover DHCP scope, then release the segment |
-| Cluster lifecycle (hub worker `cluster-lifecycle-worker`, since 2026-11-11) | `provision-cluster` | Takes a cluster file, allocates its segment, publishes the file with the allocation on its own branch, opens the merge request, waits for the merge, registers the cluster in day2's sig repos, makes a console shortcut. Run id `provision-cluster-<cluster>`. Wingman's Create starts it behind `DAY1_PROVISIONER=workflow` (ADR-0042) |
+| Cluster lifecycle (hub worker `cluster-lifecycle-worker`, since 2026-11-11) | `provision-cluster` | Takes a cluster file, allocates its segment, publishes the file with the allocation on its own branch, opens the merge request, waits for the merge, registers the cluster in day2's sig repos, makes a console shortcut. Run id `provision-cluster-<cluster>`. Every Wingman create starts it (since 3.56.0, ADR-0042) |
 | Servers into an MCE (worker inside each MCE, queue `server-lifecycle-activity-<mce>`) | `add-server-to-mce` | One server a run: server-scan allocates one locked, live-checked server (`POST /servers/available`); a pool draw picks by the InfraEnv's `agentLabels` (since 2026-11-22); then the BMC Secret, BareMetalHost and NMStateConfig, and up to 1 h for the Agent. herzi calls this |
 | | `remove-server-from-mce`, `uninstall-server-from-hc`, `publish-infraenv-to-pxe-server` | Reverse paths and PXE publishing. Since 2026-11-19 an uninstall ends at a free Agent in the MCE; leaving the MCE is `remove-server-from-mce`, a run of its own |
 | | `update-nodepool` (children `scale-up-nodepool`, `scale-down-nodepool`; merged from `feat/update-nodepool`, in production by 2026-11-23) | How many workers a hosted cluster runs: one NodePool's replicas a run (since 2026-11-18 its start takes `nodepool` only; a total over an InfraEnv kind is a 422). Commits only `replicas:` to day1 `main`, syncs the cluster's ArgoCD Application, checks the NodePools; on a scale-down the servers named, else the run's own `scale_down_policy`, else the NodePool's `redbull.io/scale-down-policy`, pick the servers that leave. One run per cluster, none while its upgrade runs. Its rule: NodePool replicas change only through it. Wingman starts it from the Nodes tab, on by default since 3.53.0 wherever Wingman has the orchestrator (ADR-0062) |
@@ -332,7 +332,7 @@ This is a proposal to discuss, not a decision. Each phase is usable on its own.
    - Make OCP-version pins a first-class edit.
    - Show ArgoCD status and offer Sync; let removal choose between orphaning and full teardown.
 5. **Switch when the workflows land:**
-   - Point the Day1 adapter at `create-cluster` and deletion at `deprovision-cluster`.
+   - Point the Day1 adapter at `create-cluster` and deletion at `deprovision-cluster` (create built: every create starts `provision-cluster` since 3.56.0, ADR-0042).
    - Expose the KubeVirt tenant flows (create, scale, upgrade, delete) as the self-service catalog.
 
 ## Decisions (2026-11-07)

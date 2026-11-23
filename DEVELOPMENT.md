@@ -139,10 +139,11 @@ With `DAY1_FAKE_FLEET`, the card's links to segments-manager point at
 there locally. Without the fake fleet, `SEGMENTS_MANAGER_UI_URL=https://segments-manager.example`
 shows the links alone, and the EPG is "—".
 
-Add `DAY1_PROVISIONER=workflow` as well to see Create start the provision-cluster workflow
-(ADR-0042) instead of opening a merge request. The fake run walks a few sample phases, about
+Create always starts the provision-cluster workflow (ADR-0042). With the fake fleet, or without
+`WORKFLOWS_API_URL` (development only; production refuses to start without it), day1 starts it
+on an in-memory stand-in, with no setting to add. The fake run walks a few sample phases, about
 6 s each, and then waits at `awaiting-merge` with a merge request link to an example host;
-nothing is written to GitLab. A file without a `mastertag` fails its run, and a second create
+nothing is written to GitLab, so the new cluster never appears in the list. A file without a `mastertag` fails its run, and a second create
 of the same name while its run waits is refused (409), as the real workflow does.
 
 Add `DAY1_UPGRADES=true` to see a cluster's **Upgrade** through the upgrade-cluster workflow

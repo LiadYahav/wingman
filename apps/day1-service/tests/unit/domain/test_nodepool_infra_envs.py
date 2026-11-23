@@ -9,7 +9,6 @@ import pytest
 from wingman_day1.domain.cluster_file import (
     NO_WORKFLOW_KEYS,
     WorkflowKeys,
-    describe_for_review,
     edit_problems,
     load_values,
     read_values,
@@ -79,11 +78,6 @@ def test_the_chart_selects_them_sorted_and_once() -> None:
     assert selected({"infraEnvName": HP, FILE_KEY: [DELL7, DELL, HP]}) == (DELL, DELL7, HP)
     assert selected({"infraEnvName": HP}) == (HP,)
     assert infra_envs_of(None, [DELL]) == (DELL,)
-
-
-def test_the_review_names_the_other_infraenvs() -> None:
-    values = read_values(load_values(file(entry(DELL, HP))))
-    assert "InfraEnv `dell-r660`, also `hp-gen11`, 2 replicas" in describe_for_review(values)
 
 
 @pytest.mark.parametrize(

@@ -1,10 +1,11 @@
-"""The chart's values schema and its one required value, the image tags (ADR-0059).
+"""The chart's values schema and its required values: the image tags (ADR-0059), the orchestrator.
 
 Every values file the repository ships renders; a key the chart does not
 read, a wrong type, a value outside its enum, range or pattern each fail
 ``helm template`` and ``helm lint --strict`` with the key named (herzi's
 ``hack/test-chart.sh``); the keys older releases dropped are accepted and
-change nothing; an empty Wingman tag fails naming it.
+change nothing; an empty Wingman tag fails naming it, and so does an empty orchestrator
+(ADR-0042) outside ``environment: development``.
 """
 
 from __future__ import annotations
@@ -19,7 +20,18 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
-from chart_render import CHART, HELM, TAG, TAGS, render, require_helm, template
+from chart_render import (
+    CHART,
+    HELM,
+    ORCHESTRATOR,
+    REQUIRED,
+    SERVER_SCAN,
+    TAG,
+    TAGS,
+    render,
+    require_helm,
+    template,
+)
 
 require_helm("the chart's schema tests")
 
@@ -44,7 +56,6 @@ WRONG: list[tuple[dict[str, Any], str, str]] = [
     ({"workflows": {"sslVerify": ""}}, "/workflows/sslVerify", "minLength"),
     # tested with `if`: the string "false" is true there
     ({"devAuth": {"enabled": "false"}}, "/devAuth/enabled", "boolean"),
-    ({"day1": {"provisioner": "pull-request"}}, "/day1/provisioner", "one of"),
     ({"environment": "staging"}, "/environment", "one of"),
     (
         {"openshiftRoute": {"tls": {"termination": "none"}}},
@@ -93,6 +104,7 @@ DEPRECATED_VALUES: dict[str, Any] = {
         "serverScanRefresh": {"enabled": True},
         "segmentsArea": {"enabled": True},
         "serverScanArea": {"enabled": True},
+        "provisioner": "merge-request",
     },
     "serverScan": {"tokenSecret": {"adminKey": "admin-token", "auditorKey": "auditor-token"}},
 }
@@ -110,6 +122,7 @@ DEPRECATED_PATHS = {
     "day1.serverScanRefresh",
     "day1.segmentsArea",
     "day1.serverScanArea",
+    "day1.provisioner",
     "serverScan.tokenSecret.adminKey",
     "serverScan.tokenSecret.auditorKey",
 }
@@ -177,8 +190,9 @@ def schema_nodes(node: Any, path: str = "") -> list[tuple[str, dict[str, Any]]]:
     ],
 )
 def test_every_values_file_the_repository_ships_validates_and_renders(file: str) -> None:
-    """values.yaml needs the tags; the minikube values and each fixture set their own."""
-    extra = TAGS if file == "values.yaml" else ()
+    """values.yaml needs the tags and the orchestrator; the minikube values (development,
+    which runs without an orchestrator) and each fixture set their own."""
+    extra = REQUIRED if file == "values.yaml" else ()
     result = template("-f", str(CHART / file), *extra, tags=False)
     assert result.returncode == 0, result.stderr
 
@@ -253,10 +267,13 @@ def test_a_link_s_dropped_ping_and_argocd_keys_are_accepted(tmp_path: Path) -> N
 @pytest.mark.parametrize("name", ["day1", "day2", "web"])
 def test_an_empty_wingman_tag_fails_naming_it(name: str) -> None:
     others = [
-        arg
-        for other in ("day1", "day2", "web")
-        if other != name
-        for arg in ("--set", f"image.{other}.tag={TAG}")
+        *REQUIRED[len(TAGS) :],
+        *(
+            arg
+            for other in ("day1", "day2", "web")
+            if other != name
+            for arg in ("--set", f"image.{other}.tag={TAG}")
+        ),
     ]
     for extra in (others, [*others, "--set", f"image.{name}.tag="]):
         refused = template(*extra, tags=False)
@@ -265,8 +282,22 @@ def test_an_empty_wingman_tag_fails_naming_it(name: str) -> None:
         assert f"--set image.{name}.tag=3.33.0" in refused.stderr
 
 
-def test_the_tests_set_the_tags_the_default_fixture_sets() -> None:
+def test_the_tests_set_what_the_default_fixture_sets() -> None:
     fixture = yaml.safe_load(DEFAULT_FIXTURE.read_text(encoding="utf-8"))
     assert [arg for arg in TAGS if arg != "--set"] == [
         f"image.{name}.tag={fixture['image'][name]['tag']}" for name in ("day1", "day2", "web")
     ]
+    assert (fixture["workflows"]["url"], fixture["serverScan"]["url"]) == (
+        ORCHESTRATOR,
+        SERVER_SCAN,
+    )
+
+
+def test_an_empty_orchestrator_fails_naming_it_outside_development() -> None:
+    """ADR-0042, amended 2026-11-23: every create starts provision-cluster there."""
+    for empty in (("--set", "workflows.url="), ("--set", "workflows=null")):
+        refused = template(*TAGS, *empty, tags=False)
+        assert refused.returncode != 0
+        assert "workflows.url is required" in refused.stderr
+        development = template(*TAGS, *empty, "--set", "environment=development", tags=False)
+        assert development.returncode == 0, development.stderr

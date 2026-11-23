@@ -7,7 +7,7 @@ and shows them.
 ## The problem
 
 When a cluster MR waits, the reason is often outside GitLab:
-- the allocate-segment workflow hasn't written `vlanId` yet;
+- the allocate-segment workflow hasn't written `vlanId` yet (since 3.56.0 a create starts provision-cluster, which writes it, and the create page shows that run, ADR-0042);
 - the platform-config pipeline failed;
 - later, the `create-cluster` workflow stopped on a check such as "not enough free hosts in the InfraEnv".
 

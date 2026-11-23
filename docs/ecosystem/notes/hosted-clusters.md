@@ -147,7 +147,7 @@ chart values.yaml
 | KubeVirt only | `cores` (6), `memory` (12Gi), `qosClass`, `size` (32Gi root), `type`, `storageClass`, `vlan` (→ NAD `default/nad-<vlan>`, else top-level `vlanId`), `additionalNetwork`, `attachDefaultNetwork` |
 
 **Written by automation, never by a human or portal**
-- `vlanId` and `dhcp_values: {network: <x.y.z.0>}` (plus `exclusions`): appended by the orchestrator's `allocate-segment` workflow.
+- `vlanId` and `dhcp_values: {network: <x.y.z.0>}` (plus `exclusions`): appended by the orchestrator's `provision-cluster` workflow, in the commit that pushes the new file on its branch `provision-cluster/<stem>` (until workflows `ff1aba7`, 2026-11-11, `allocate-segment` appended them on the MR branch; it now refuses `values_branch`).
 - `mcFiles`: defaults to the list of nodepool config names.
 - `mcConfigMap[]`: written by CI under `# === Added by CI ===`. It is frozen once present.
 
@@ -236,8 +236,8 @@ nodepool:
   - name: nm-conf-test-storage-site-a-a-kubevirt
   - name: worker-kubeletconfig-reserved
 # ---- later appended to the SAME file on the MR branch, never by the portal ----
-# vlanId: 4xx                         <- allocate-segment workflow
-# dhcp_values: {network: 192.0.2.x}   <- allocate-segment workflow
+# vlanId: 4xx                         <- provision-cluster workflow (allocate-segment until 2026-11-11)
+# dhcp_values: {network: 192.0.2.x}   <- provision-cluster workflow (allocate-segment until 2026-11-11)
 # mcConfigMap: [...]                  <- CI ("# === Added by CI ===")
 ```
 Older, fully explicit example: `$SE/gitops/platform-config/sites/site-a/mces/cluster-mce-site-a/hostedClusters/cluster-cicd-prod-2.yaml`. It has an explicit `clusterName`, `agentLabelSelector`, `'''4'''` labels, `vlanId`, `dhcp_values`, `Network:` flows and `mcConfigMap`.
@@ -278,7 +278,7 @@ Two keys Wingman needs are not on the chart's `main`. The change the chart's own
   - `internal/gitops-day1/platform-config` (values repo with `.gitlab-ci.yml`).
   - `internal/helm-charts/hostedclusters-setup` (chart).
 - The connected sandbox uses GitHub: `team-redbull/day1` (values) and `team-redbull/helm-charts-hostedclusters-setup`. The day2 registration Job targets `team-redbull/gitops-day2-prod` (GitHub).
-- The workflows' `allocate-segment` pushes into whatever `day1_repo_url` points at (https + token; `$ECO/workflows/shared/settings.py`).
+- The workflows' `provision-cluster` (before 2026-11-11, `allocate-segment`) pushes into whatever `day1_repo_url` points at (https + token; `$ECO/workflows/shared/settings.py`).
 
 ### 3.2 ApplicationSet cascade (`$SE/gitops/argocd-platform/*/templates`)
 1. **Tier 1 `sites`** (hub Argo, `openshift-gitops`): git directories generator over `sites/*` produces one Application per site. That Application installs the `mces` chart with `site=<dir>`. Sync is automated with selfHeal, prune=false.
@@ -313,6 +313,7 @@ On every push to a **non-main** branch (never on MR events, `[skip ci]` honoured
 - `allocate_segments`:
   - Steps: `get_changed_clusters` → `filter_frozen` → for each **new** file (no `vlanId` and no `dhcp_values`), `POST {WORKFLOWS_ORCHESTRATOR_URL}/workflows/segment-lifecycle/allocate-segment {"cluster":"<file stem>","values_branch":"<branch>"}`, then poll `GET /workflows/runs/{id}`.
   - The workflow, backed by Segments Manager, **pushes `vlanId` and `dhcp_values` onto that branch** with `[skip ci]`.
+  - Since workflows `ff1aba7` (2026-11-11) allocate-segment refuses `values_branch` (422) and writes nothing; `provision-cluster` writes both keys on its own branch, and every Wingman create starts it since 3.56.0 (ADR-0042).
 - `stage_mc_sources`: templates get `VLAN_ID`, `{CLUSTER_NAME}` and `{OPENSHIFT_VERSION}` substituted.
 - `render_mc_configs` (butane), then `inject_configs` (writes `mcConfigMap` into the file).
 - `commit_and_push` (`CI: Update mcConfigMap from mc-files [skip ci]`).
@@ -404,7 +405,7 @@ There is **no Day1/create-cluster workflow** in the workflows API (OpenAPI: segm
   - The name is unique repo-wide and matches `ocp4-<env>-<name>-<site>`, with env equal to the MCE's env field.
   - Zones sharing an InfraEnv carry `name`.
   - Optionally run `helm template` with the 4 layered files plus the `clusterName` parameter, as `validate_all_clusters.py` does.
-- After the MR is opened, **track the branch pipeline**:
+- After the MR is opened, **track the branch pipeline** (since 3.56.0 Wingman opens no create MR: it starts `provision-cluster` and shows its run, ADR-0042):
   - The `allocate-segment` run (`GET /workflows/runs/{id}`; deterministic id).
   - The CI commits that append `vlanId`, `dhcp_values` and `mcConfigMap`.
   - Only then show "ready to merge".

@@ -8,23 +8,21 @@ import pytest
 
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.application.approvals import RepoKey
-from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.domain.errors import ResourceNotFoundError
+from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import validate_spec
+
+LARK = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-lark-site1")
 
 
 async def make_changes(context: Day1Context, support: Any) -> None:
-    body = support.create_body()
-    cluster = await context.clusters.create(
-        CreateCluster(
-            name=body["name"],
-            site=body["site"],
-            mce=body["mce"],
-            spec_name=body["spec_name"],
-            spec_version=body["spec_version"],
-            variables=body["variables"],
-        ),
+    current = await context.clusters.get(LARK)
+    cluster = await context.clusters.modify(
+        LARK,
+        current.content.replace("replicas: 3", "replicas: 4"),
         user=support.ALICE,
+        summary="Scale lark",
+        last_commit_id=current.last_commit_id,
     )
     await context.approvals.approve(
         RepoKey.DAY1,

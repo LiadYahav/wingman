@@ -11,9 +11,9 @@ export interface WorkflowRun {
 }
 
 /**
- * A provision-cluster run (ADR-0042): `POST /clusters` in workflow mode (202),
- * and `GET /clusters/{name}/provision-run`. The phase is the workflow's own
- * word; Wingman keeps no list of them.
+ * A provision-cluster run (ADR-0042): what `POST /clusters` answers (202), and
+ * `GET /clusters/{name}/provision-run`. The phase is the workflow's own word;
+ * Wingman keeps no list of them.
  */
 export interface ProvisionRun extends WorkflowRun {
   /** The new cluster file's stem. */
@@ -21,11 +21,6 @@ export interface ProvisionRun extends WorkflowRun {
   /** The merge request the workflow opened, once it has. */
   merge_request_url: string | null;
   merge_request_state: string | null;
-}
-
-/** `GET /clusters/provisioner`: what Create does in this deployment. */
-export interface Provisioner {
-  mode: "merge-request" | "workflow";
 }
 
 /** `GET /clusters/{name}/delete-workflow` (501 FEATURE_DISABLED until the workflow exists). */

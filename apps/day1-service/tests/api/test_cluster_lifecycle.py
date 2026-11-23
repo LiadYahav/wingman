@@ -1,4 +1,4 @@
-"""The whole cluster lifecycle over HTTP: list, create, approve, edit, delete.
+"""The whole cluster lifecycle over HTTP: list, create, the workflow's merge, edit, delete.
 
 Runs the real app (``create_app``) on the in-memory GitLab seeded from
 dev/gitlab-fixtures; only the adapters are fakes.
@@ -15,11 +15,22 @@ import yaml
 from wingman_core.domain.git import RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
 NEW = "ocp4-prod-falcon-site1"
 NEW_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{NEW}.yaml"
 
 Auth = Callable[[User], dict[str, str]]
+
+
+async def hook(client: httpx.AsyncClient, project_id: int, event: str) -> None:
+    """GitLab's webhook for ``event`` in the day1 project: it clears what went stale."""
+    response = await client.post(
+        "/api/webhooks/gitlab",
+        json={"object_kind": "push", "project": {"id": project_id}, "ref": "refs/heads/main"},
+        headers={"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": event},
+    )
+    assert response.json() == {"status": "ok"}
 
 
 async def test_read_views_list_the_fixture_repo(
@@ -68,15 +79,16 @@ async def test_read_views_list_the_fixture_repo(
     assert lab["follows_convention"] is False
 
 
-async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one cluster's whole life, step by step
-    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+async def test_create_merge_edit_delete(
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    provision: FakeProvisionWorkflow,
 ) -> None:
-    alice, bob = auth(support.ALICE), auth(support.BOB)
+    alice = auth(support.ALICE)
     day1 = await support.project_id(gitlab, support.DAY1)
     before = gitlab.snapshot(day1, "main")
-
-    # Approvals are listed (and cached) before the create.
-    assert (await client.get("/api/day1/approvals", headers=alice)).json() == []
 
     preview = await client.post(
         "/api/day1/clusters/preview", json=support.create_body(), headers=alice
@@ -84,52 +96,33 @@ async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one clus
     assert preview.status_code == 200, preview.text
     assert preview.json()["path"] == NEW_PATH
 
+    # A create starts provision-cluster with exactly the previewed file (ADR-0042).
     created = await client.post("/api/day1/clusters", json=support.create_body(), headers=alice)
-    assert created.status_code == 201, created.text
-    mr = created.json()
-    assert mr["title"] == f"[Wingman/Day1] Create cluster {NEW} from spec agent-standard"
-    assert mr["source_branch"].startswith(f"platform/alice/create-cluster-{NEW}-")
-    assert mr["labels"] == ["create", "day1", "wingman"]
-    assert mr["author"]["username"] == "alice"
-    assert mr["repo"] == "day1"
-
-    # Exactly one file was added on the branch, and main is untouched.
-    branch = gitlab.snapshot(day1, mr["source_branch"])
-    assert set(branch) - set(before) == {NEW_PATH}
-    assert {p: c for p, c in branch.items() if p in before} == before
-    assert gitlab.snapshot(day1, "main") == before
-    values = yaml.safe_load(branch[NEW_PATH])
+    assert created.status_code == 202, created.text
+    assert created.json()["workflow_id"] == f"provision-cluster-{NEW}"
+    (started,) = provision.starts
+    assert started["content"] == preview.json()["yaml"]
+    values = yaml.safe_load(started["content"])
     assert values["mastertag"] == "4.18.56-x86_64"
     assert [np["infraEnvName"] for np in values["nodepool"]] == [
         "dell-r660-site1-128c-1024gb-5tb",
         "hp-gen11-site1-64c",
     ]
     assert not {"vlanId", "dhcp_values", "mcFiles", "mcConfigMap"} & set(values)
+    # Wingman wrote nothing: the workflow pushes the file and opens the merge request.
+    assert gitlab.snapshot(day1, "main") == before
+    assert await gitlab.list_merge_requests(day1, state=None) == []
 
-    # The new MR shows up at once: the write cleared the cached list (legacy cleared the wrong key).
-    pending = (await client.get("/api/day1/approvals", headers=alice)).json()
-    assert [p["iid"] for p in pending] == [mr["iid"]]
-
-    # A second create of the same name is refused while the first MR is open.
+    # While the workflow's merge request is open, a second create of the name is refused.
+    await support.open_provision_mr(gitlab, NEW)
+    await hook(client, day1, "Merge Request Hook")
     again = await client.post("/api/day1/clusters", json=support.create_body(), headers=alice)
-    assert again.status_code == 409
-    assert again.json()["code"] == "ALREADY_EXISTS"
+    assert (again.status_code, again.json()["code"]) == (409, "ALREADY_EXISTS")
+    assert "an open merge request already creates" in again.json()["detail"]
 
-    # The requester cannot approve; another admin approves the reviewed commit.
-    detail = (await client.get(f"/api/day1/approvals/{mr['iid']}", headers=bob)).json()
-    sha = detail["mr"]["sha"]
-    own = await client.post(
-        f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": sha}, headers=alice
-    )
-    assert own.status_code == 403
-    assert own.json()["code"] == "SELF_APPROVAL"
-    merged = await client.post(
-        f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": sha}, headers=bob
-    )
-    assert merged.status_code == 200, merged.text
-    assert merged.json()["state"] == "merged"
-
-    # The merge cleared the cached tree: the new cluster is listed immediately.
+    # A person merges it: the file Wingman sent, with the segment the workflow reserved.
+    await support.provisioned(gitlab, started)
+    await hook(client, day1, "Push Hook")
     names = [c["name"] for c in (await client.get("/api/day1/clusters", headers=alice)).json()]
     assert NEW in names
     cluster = (await client.get(f"/api/day1/clusters/{NEW}", headers=alice)).json()
@@ -138,9 +131,14 @@ async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one clus
         {"team": "redbull", "name": "cluster-roles", "version": "main", "override_values": {}}
     ]
     assert cluster["values"]["mastertag"] == "4.18.56-x86_64"
+    assert cluster["values"]["network"] == {
+        "vlan_id": 1234,
+        "dhcp_network": "10.20.50.0",
+        "segment": "10.20.50.0/24",
+    }
 
-    # Automation commits vlanId/dhcp_values to main (as CI would after the workflow).
-    content = cluster["yaml"] + "vlanId: 412\ndhcp_values:\n  network: 10.20.99.0\n"
+    # CI commits its keys to main.
+    content = cluster["yaml"] + "\nmcFiles:\n- worker-kubeletconfig-reserved\n"
     await support.push(gitlab, support.DAY1, branch="main", file=NEW_PATH, content=content)
 
     # An edit made from the stale read is refused (ADR-0006): GitLab itself refuses it,
@@ -156,19 +154,10 @@ async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one clus
     assert stale.status_code == 409
     assert stale.json()["code"] == "REVISION_CONFLICT"
 
-    # GitLab's push webhook clears the cached files; the next read sees the allocation.
-    hook = await client.post(
-        "/api/webhooks/gitlab",
-        json={"object_kind": "push", "project": {"id": day1}, "ref": "refs/heads/main"},
-        headers={"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Push Hook"},
-    )
-    assert hook.json() == {"status": "ok"}
+    # GitLab's push webhook clears the cached files; the next read sees CI's keys.
+    await hook(client, day1, "Push Hook")
     fresh = (await client.get(f"/api/day1/clusters/{NEW}", headers=alice)).json()
-    assert fresh["values"]["network"] == {
-        "vlan_id": 412,
-        "dhcp_network": "10.20.99.0",
-        "segment": "10.20.99.0/24",
-    }
+    assert "mcFiles" in fresh["yaml"]
     # Dropping automation's keys is refused.
     dropped = await client.patch(
         f"/api/day1/clusters/{NEW}",
@@ -176,7 +165,7 @@ async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one clus
         headers=alice,
     )
     assert dropped.status_code == 422
-    assert any("vlanId" in p for p in dropped.json()["details"]["problems"])
+    assert any("mcFiles" in p for p in dropped.json()["details"]["problems"])
 
     edited = await client.patch(
         f"/api/day1/clusters/{NEW}",

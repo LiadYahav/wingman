@@ -230,8 +230,13 @@ async def test_the_review_page_preview_applies_only_to_a_flavor_update(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     alice, bob = auth(support.ALICE), auth(support.BOB)
-    created = await client.post("/api/day1/clusters", json=support.create_body(), headers=alice)
-    day1 = await client.get(f"/api/day1/approvals/{created.json()['iid']}/rollout", headers=bob)
+    lark = (await client.get("/api/day1/clusters/ocp4-prod-lark-site1", headers=alice)).json()
+    edited = await client.patch(
+        "/api/day1/clusters/ocp4-prod-lark-site1",
+        json={"updated_yaml": lark["yaml"] + "# noted\n", "last_commit_id": lark["last_commit_id"]},
+        headers=alice,
+    )
+    day1 = await client.get(f"/api/day1/approvals/{edited.json()['iid']}/rollout", headers=bob)
     assert day1.json()["applies"] is False
     assert day1.json()["reason"] == "this merge request does not change a flavor"
     deleting = await client.delete("/api/day1/specs/agent-single", headers=alice)

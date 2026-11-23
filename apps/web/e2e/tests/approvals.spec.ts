@@ -148,7 +148,7 @@ test.describe("Approve with the reviewed sha", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
 
     const alert = page.getByRole("alert").filter({ hasText: "The branch moved" });
-    await expect(alert).toContainText("allocate-segment workflow");
+    await expect(alert).toContainText("CI or a platform workflow pushed to it");
     await alert.getByRole("button", { name: "Reload" }).click();
     await expect(page.getByText("99999999")).toBeVisible();
     await expect(alert).not.toBeVisible();

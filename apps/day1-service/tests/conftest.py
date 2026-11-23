@@ -9,7 +9,7 @@ HTTP to it through ``httpx.ASGITransport``.
 from __future__ import annotations
 
 import itertools
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -33,6 +33,7 @@ from wingman_day1.domain.status import Condition, HostedClusterObservation, Node
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.main import Adapters, create_app
@@ -71,6 +72,8 @@ ROOMY = (
 )
 """A hub with room for a control plane: 500 allocatable pods on its two workers."""
 PROD_SITE = "site1"
+SEGMENT = 'vlanId: 1234\n\ndhcp_values:\n  network: "10.20.50.0"\n'
+"""What the provision-cluster workflow adds to a new file before it pushes it (ADR-0042)."""
 
 
 class StepClock:
@@ -239,7 +242,7 @@ def build_app(
             inventory=inventory,
             uninstall=uninstall,
             ledger=ledger,
-            provision=provision,
+            provision=provision or FakeProvisionWorkflow(clock=clock),
             upgrade=upgrade,
             day2_installs=day2,
             add_server=add_server,
@@ -250,14 +253,23 @@ def build_app(
 
 
 @pytest.fixture
+def provision(clock: StepClock) -> FakeProvisionWorkflow:
+    """The provision-cluster workflow every create starts (ADR-0042); ``starts`` says what."""
+    return FakeProvisionWorkflow(clock=clock)
+
+
+@pytest.fixture
 def app(
     gitlab: InMemoryGitLab,
     hub: FakeHubApi,
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: StepClock,
+    provision: FakeProvisionWorkflow,
 ) -> FastAPI:
-    return build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
+    return build_app(
+        gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock, provision=provision
+    )
 
 
 @pytest.fixture
@@ -297,6 +309,21 @@ async def push(gitlab: InMemoryGitLab, path: str, *, branch: str, file: str, con
     else:
         change = FileChange.update(RepoPath(file), content, last_commit_id=current.last_commit_id)
     await gitlab.commit(pid, branch=branch, message="outside push [skip ci]", changes=[change])
+
+
+async def provisioned(
+    gitlab: InMemoryGitLab, start: Mapping[str, str], *, site: str = PROD_SITE
+) -> str:
+    """Main once the merge request of a provision run (one of the fake's ``starts``) merges.
+
+    The file Wingman sent, plus the segment the workflow reserved, at
+    ``<site>/<mce>/hostedClusters/ocp4-<cluster>.yaml``. Returns that path.
+    """
+    stem = start["cluster"] if start["cluster"].startswith("ocp4-") else f"ocp4-{start['cluster']}"
+    file = f"sites/{site}/mces/{start['mce']}/hostedClusters/{stem}.yaml"
+    content = f"{start['content'].rstrip()}\n\n{SEGMENT}"
+    await push(gitlab, DAY1, branch="main", file=file, content=content)
+    return file
 
 
 async def open_provision_mr(
@@ -355,6 +382,7 @@ class Support:
     seeded = staticmethod(seeded)
     project_id = staticmethod(project_id)
     push = staticmethod(push)
+    provisioned = staticmethod(provisioned)
     open_provision_mr = staticmethod(open_provision_mr)
 
 

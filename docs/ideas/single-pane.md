@@ -172,7 +172,9 @@ Still to do:
   - OpenShift OAuth, with the cluster's admin group as Wingman's admins;
   - server-scan and segments-manager reads on;
   - the orchestrator on (node uninstall);
-  - `day1.provisioner: merge-request` until the store is shared.
+  - `day1.provisioner: merge-request` until the store is shared (the setting
+    is gone since 3.56.0: every create starts the provision-cluster workflow,
+    ADR-0042).
 - **Chart fixes found on the way** go in their own PR: an nginx that runs
   under OpenShift's restricted SCC, pinned (chart hardening; built in 3.33.0,
   ADR-0058 and ADR-0059).
@@ -189,7 +191,8 @@ Still to do:
   The cluster-lifecycle worker already supports GitLab (`day1GitProvider:
   gitlab`, `day2SigRepoUrlTemplate` with `{sig}`). Switching it, and the
   platform's ArgoCD, to Wingman's GitLab makes the sandbox match production.
-  Once switched, set `day1.provisioner: workflow`.
+  Once switched, set `day1.provisioner: workflow` (done another way: since
+  3.56.0 every create starts the workflow, and the setting is gone).
 - **Disk**: the sandbox workers sit close to the kubelet's eviction line.
   Large images must go to the roomiest worker, with an ephemeral-storage
   request, while someone watches free disk.
@@ -446,7 +449,7 @@ environment.
 
 | Count | From |
 |---|---|
-| Clusters per MCE | The day1 repo's files, plus open create MRs (the name suggestion already counts them, ADR-0040) |
+| Clusters per MCE | The day1 repo's files, plus the provision-cluster workflow's open MRs, by their branch (the name suggestion counts them too, ADR-0040, ADR-0042) |
 | This owner's clusters per MCE | The `owner` in each cluster file |
 | Spare servers | server-scan's fleet rows: `openshift_state == INSTALLED_TO_INVENTORY` with that `mce_name` (registered to the MCE, in no cluster) |
 
@@ -466,9 +469,10 @@ cluster-navigator would need must not see the same number.
 - Wingman picks the MCE and shows every candidate's numbers and why it won;
 - an admin may choose another MCE that passes the checks, giving a reason
   (decision 15);
-- the MR description records the numbers and the choice;
-- with `day1.provisioner: workflow`, the chosen MCE goes to the
-  provision-cluster workflow;
+- the `mce_placement_chosen` log line records the numbers and the choice
+  (the create MR's description did, until 3.56.0 removed that MR);
+- the chosen MCE goes to the provision-cluster workflow, which every create
+  starts (ADR-0042);
 - the InfraEnv list follows the chosen MCE, as today.
 
 **Settings**: the minimum free pods.

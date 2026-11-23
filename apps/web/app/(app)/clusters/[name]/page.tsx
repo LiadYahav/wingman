@@ -42,7 +42,7 @@ import type {
 
 /** A 409 REVISION_CONFLICT: the file moved since this page read it. */
 const STALE_FILE =
-  "The cluster file changed since you opened it (CI or the allocate-segment workflow may have committed to it). Reload to see the current file, then make your change again.";
+  "The cluster file changed since you opened it (CI, a platform workflow or another person may have committed to it). Reload to see the current file, then make your change again.";
 
 // eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 function ClusterDetailContent() {

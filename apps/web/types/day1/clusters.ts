@@ -63,7 +63,7 @@ export interface NodePoolValues {
   tuning_config: unknown;
 }
 
-/** `vlanId` and `dhcp_values.network`: written by the allocate-segment workflow. */
+/** `vlanId` and `dhcp_values.network`: written by the provision-cluster workflow (ADR-0042). */
 export interface ClusterNetwork {
   vlan_id: unknown;
   dhcp_network: string | null;

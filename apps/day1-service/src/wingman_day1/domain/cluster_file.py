@@ -2,10 +2,10 @@
 
 A cluster file is the last values layer of the hostedclusters-setup chart.
 People (and Wingman) write ``owner``, ``mastertag``, ``nodepool[]`` and
-optional fields such as ``platform: kubevirt``. Automation writes the rest on
-the merge request's branch, after Wingman's commit:
+optional fields such as ``platform: kubevirt``. Automation writes the rest:
 
-- ``vlanId`` and ``dhcp_values``: the allocate-segment workflow;
+- ``vlanId`` and ``dhcp_values``: the provision-cluster workflow, in the
+  commit that pushes a new file on its branch (ADR-0042);
 - ``mcFiles``, ``mcConfigMap`` and ``tuningConfigmap``: the day1 CI pipeline
   (``tuningConfigmap`` since ADR-0061: the manifests ``tuningConfig`` names).
 
@@ -48,7 +48,7 @@ from wingman_day1.domain.upgrades import version_problems
 from wingman_day1.domain.used_agents import used_labels
 
 AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
-"""Written on the MR branch by the allocate-segment workflow and CI; never by Wingman."""
+"""Written by the provision-cluster workflow (the segment) and CI; never by Wingman."""
 PATH_KEYS: Final = ("clusterName", "site", "mce")
 """Passed by the ApplicationSet from the file's path; a rendered file must not set them."""
 
@@ -337,7 +337,7 @@ def rendered_file_problems(content: str) -> list[str]:
         return list(exc.problems)
     problems = _mastertag_problems(values) + _nodepool_problems(values, required=True)
     problems += [
-        f"{key} is written by automation (the allocate-segment workflow or CI), never by Wingman"
+        f"{key} is written by automation (the provision-cluster workflow or CI), never by Wingman"
         for key in AUTOMATION_KEYS
         if key in values
     ]
@@ -430,18 +430,3 @@ def require_valid(problems: Sequence[str], *, message: str) -> None:
     """Raise ``InvalidClusterFileError`` when there are problems."""
     if problems:
         raise InvalidClusterFileError(message, problems)
-
-
-def describe_for_review(values: ClusterValues) -> str:
-    """One paragraph a reviewer reads in the MR description."""
-    lines = [f"- mastertag: `{values.mastertag or '(none)'}`", f"- platform: `{values.platform}`"]
-    for pool in values.nodepools:
-        label = pool.name or pool.infra_env_name or "?"
-        replicas = pool.replicas if pool.replicas is not None else 1
-        configs = ", ".join(pool.configs) or "none"
-        also = "".join(f", also `{name}`" for name in pool.additional_infra_env_names)
-        lines.append(
-            f"- nodepool `{label}`: InfraEnv `{pool.infra_env_name}`{also}, "
-            f"{replicas} replicas, configs: {configs}"
-        )
-    return "\n".join(lines)

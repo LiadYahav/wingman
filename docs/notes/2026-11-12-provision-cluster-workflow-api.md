@@ -7,6 +7,12 @@ is the contract between day1 and the web for that mode, written before the
 code. Wingman only starts the run and shows it: the procedure, its checks
 and its phases are the workflow's (ADR-0038's rule).
 
+**Since 3.56.0 (2026-11-23):** there is no mode any more. Every create
+starts the workflow, `WORKFLOWS_API_URL` is required, Wingman opens no
+create merge request, and the setting `DAY1_PROVISIONER` (3.7.0 to 3.55) and
+`GET /api/day1/clusters/provisioner` are gone (ADR-0042's 2026-11-23
+amendment). The rest of this note is the contract as written.
+
 ## 1. What the workflow takes and does
 
 - **Start:** `POST /workflows/cluster-lifecycle/provision-cluster?cluster=<name>&mce=<folder>`,
@@ -19,7 +25,7 @@ and its phases are the workflow's (ADR-0038's rule).
     workflow finds the site from it.
   - The body is sent verbatim, comments included. It must hold `owner`,
     `mastertag` and a nodepool, and must not hold `vlanId`, `dhcp_values`,
-    `mcConfigMap` or `AutomateAllocation`.
+    `mcConfigMap`, `tuningConfigmap` or `AutomateAllocation`.
 - **What it does:** it reads day1 main, finds the MCE folder, and judges the
   file against the value layers. Then it reserves a segment (the
   allocate-segment workflow, as a child), pushes the file with the

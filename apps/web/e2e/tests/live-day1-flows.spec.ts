@@ -1,12 +1,14 @@
 /**
  * The main day1 flows against a running stack: dev login with the secret,
- * the dashboard, create a cluster from a spec, find it among the pending
- * approvals, approve it as a second admin with the sha they reviewed (a
- * commit pushed after the review is refused, reload, approve), edit and
- * delete it with last_commit_id; live status off (or streaming when on);
- * a spec built from the catalog, its history, an edit and a delete; and the
- * audit log. Every change is a real MR, so run it only against a disposable
- * GitLab (the in-memory fake, or the seeded local GitLab CE).
+ * the dashboard, create a cluster from a spec (it starts the provision-cluster
+ * run, ADR-0042: the in-memory one where day1 has no WORKFLOWS_API_URL), an
+ * edit with last_commit_id found among the pending approvals and approved as
+ * a second admin with the sha they reviewed (a commit pushed after the review
+ * is refused, reload, approve), a delete with last_commit_id rejected; live
+ * status off (or streaming when on); a spec built from the catalog, its
+ * history, an edit and a delete; and the audit log. Every change is a real
+ * MR, so run it only against a disposable GitLab (the in-memory fake, or the
+ * seeded local GitLab CE).
  *
  *   WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
  *     npx playwright test live-day1-flows --project=live
@@ -42,7 +44,9 @@ async function specReadAt(page: Page, name: string): Promise<string | null> {
 
 let alice: Page;
 let bob: Page;
-let createUrl: string;
+let editUrl: string;
+/** The file alice's edit proposes. */
+let edited: string;
 
 test.beforeAll(async ({ browser }) => {
   alice = await loginAs(browser, "alice");
@@ -70,7 +74,7 @@ test("the dashboard counts the clusters and specs; the sidebar and the docs are 
   await expect(alice.getByRole("heading", { name: "Day2 Addons" })).toBeVisible();
 });
 
-test("create a cluster from a spec opens an MR its requester cannot approve", async () => {
+test("create a cluster from a spec starts provision-cluster and shows its run", async () => {
   await alice.goto("/clusters/new");
   await alice.getByTestId(`spec-card-${SPEC}`).click();
   // The name gives the site and prod; the version is chosen; Wingman picks the MCE (ADR-0050)
@@ -119,40 +123,45 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   await alice.getByTestId("review-button").click();
   const dialog = alice.getByRole("dialog");
   await expect(dialog).toContainText(`hostedClusters/${NAME}.yaml`);
-  await dialog.getByRole("button", { name: /confirm/i }).click();
-  await alice.waitForURL(/\/approvals\/day1-\d+$/, { timeout: 15_000 });
-  createUrl = alice.url();
+  await dialog.getByRole("button", { name: "Confirm — Start provision-cluster" }).click();
+  await expect(alice.getByTestId("provision-run")).toContainText(NAME, { timeout: 15_000 });
+});
 
+test("an edit (with last_commit_id) opens an MR its requester cannot approve", async () => {
+  await alice.goto(`/clusters/${HERZI}`);
+  await alice.getByRole("button", { name: "Edit" }).click();
+  const editor = alice.getByLabel("Cluster file");
+  edited = `${(await editor.inputValue()).trimEnd()}\n# edited by the live day1 flows ${RUN}\n`;
+  await editor.fill(edited);
+  await alice.getByRole("button", { name: /review & submit/i }).click();
+  await alice.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+  editUrl = await followToast(alice, /Modify MR !\d+ opened/);
   await expect(alice.getByRole("button", { name: /review & approve/i })).toBeDisabled();
 });
 
 test("the pending approvals list the MR under its repo", async () => {
   await bob.goto("/approvals");
-  const mr = bob.getByRole("link", { name: new RegExp(`Create cluster ${NAME}`) });
+  const mr = bob.getByRole("link", { name: new RegExp(`Modify cluster ${HERZI}`) });
   await expect(mr).toBeVisible();
   await bob.getByRole("button", { name: "specs", exact: true }).click();
   await expect(mr).toHaveCount(0);
   await bob.getByRole("button", { name: "day1", exact: true }).click();
   await expect(mr).toBeVisible();
-  await expect(mr).toHaveAttribute("href", new URL(createUrl).pathname);
+  await expect(mr).toHaveAttribute("href", new URL(editUrl).pathname);
 });
 
 test("an approval of a head that moved is refused; after a reload it merges", async () => {
-  await bob.goto(createUrl);
+  await bob.goto(editUrl);
   await bob.getByRole("button", { name: /review & approve/i }).waitFor();
 
-  // Stand in for CI or the allocate-segment workflow: a commit after bob's review.
-  const iid = createUrl.split("-").pop();
+  // Stand in for CI: a commit after bob's review.
+  const iid = editUrl.split("-").pop();
   const headers = await auth(alice);
   const detail = await (await alice.request.get(`/api/day1/approvals/${iid}`, { headers })).json();
   const file = detail.diffs[0];
-  const content = file.diff.split("\n")
-    .filter((l: string) => l.startsWith("+") && !l.startsWith("+++"))
-    .map((l: string) => l.slice(1))
-    .join("\n");
   const pushed = await alice.request.put(`/api/day1/approvals/${iid}`, {
     headers,
-    data: { files: [{ path: file.new_path, content: `${content}\n# pushed after the review\n` }], message: "after review", sha: detail.mr.sha },
+    data: { files: [{ path: file.new_path, content: `${edited}# pushed after the review\n` }], message: "after review", sha: detail.mr.sha },
   });
   expect(pushed.ok()).toBeTruthy();
 
@@ -163,34 +172,23 @@ test("an approval of a head that moved is refused; after a reload it merges", as
   await moved.getByRole("button", { name: "Reload" }).click();
   await expect(bob.getByText("pushed after the review").first()).toBeVisible();
 
-  await approveAndMerge(bob, createUrl);
+  await approveAndMerge(bob, editUrl);
+  await alice.goto(`/clusters/${HERZI}`);
+  await expect(alice.getByText(`hcp-${HERZI.replace(/^ocp4-/, "")}`)).toBeVisible();
 });
 
-test("the new cluster shows its HostedCluster and a pending VLAN", async () => {
-  await alice.goto(`/clusters/${NAME}`);
-  await expect(alice.getByText(`hcp-${NAME.replace(/^ocp4-/, "")}`)).toBeVisible();
-  await expect(alice.getByText("pending", { exact: true }).first()).toBeVisible();
-});
-
-test("an edit (with last_commit_id) merges", async () => {
-  await alice.goto(`/clusters/${NAME}`);
-  await alice.getByRole("button", { name: "Edit" }).click();
-  const editor = alice.getByLabel("Cluster file");
-  await editor.fill((await editor.inputValue()).replace("replicas: 2", "replicas: 3"));
-  await alice.getByRole("button", { name: /review & submit/i }).click();
-  await alice.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
-  await approveAndMerge(bob, await followToast(alice, /Modify MR !\d+ opened/));
-});
-
-test("a delete (with last_commit_id) merges and the cluster is gone", async () => {
-  await alice.goto(`/clusters/${NAME}`);
+test("a delete (with last_commit_id) opens an MR; rejected, the cluster stays", async () => {
+  await alice.goto(`/clusters/${HERZI}`);
   await alice.getByRole("button", { name: "Delete" }).click();
   await alice.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
-  await approveAndMerge(bob, await followToast(alice, /Delete MR !\d+ opened/));
+  const url = await followToast(alice, /Delete MR !\d+ opened/);
+  await bob.goto(url);
+  await bob.getByRole("button", { name: "Reject" }).click();
+  await bob.getByRole("dialog").getByRole("button", { name: "Confirm — Reject MR" }).click();
+  await expect(bob.getByText("closed", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   await alice.goto("/clusters");
   await expect(alice.getByTestId(`cluster-row-${HERZI}`)).toBeVisible();
-  await expect(alice.getByTestId(`cluster-row-${NAME}`)).toHaveCount(0);
 });
 
 test("live status that is off is not an error; on, it streams frames", async () => {
@@ -308,8 +306,8 @@ test("a spec delete carries the read's last_commit_id (once day1 sends it), merg
 test("the audit log shows the merged MRs and commits, and expands them", async () => {
   await alice.goto("/audit");
   await alice.getByRole("button", { name: /merge requests/i }).click();
-  await alice.getByText(`Delete cluster ${NAME}`).click();
-  await expect(alice.getByText(`hostedClusters/${NAME}.yaml`)).toBeVisible();
+  await alice.getByText(`Modify cluster ${HERZI}`).first().click();
+  await expect(alice.getByText(`hostedClusters/${HERZI}.yaml`).first()).toBeVisible();
 
   await alice.getByRole("button", { name: /^commits/i }).click();
   await alice.getByPlaceholder("Search commits...").fill(NEW_SPEC);

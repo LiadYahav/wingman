@@ -9,6 +9,9 @@ Helm chart for deploying the Wingman platform on OpenShift (or, for local use, K
 - Helm 3.x
 - A GitLab with the day1 project, the specs project and the sigs group of team projects, and a
   service account token for them (see [GitLab token](#gitlab-token))
+- The platform's workflows orchestrator, with `provision-cluster`, and server-scan
+  (`workflows.url`, `serverScan.url`): every create starts provision-cluster (ADR-0042), and
+  the chart fails without them unless `environment` is `development`
 - (Optional) the Prometheus Operator CRDs, for monitoring (`docs/ops/metrics.md`)
 
 ## Quick Start
@@ -57,6 +60,8 @@ helm upgrade --install wingman ./deploy/helm/wingman -n wingman \
   --set auth.jwtSecret=$(openssl rand -hex 32) \
   --set auth.oauthClientSecret=$(openssl rand -hex 32) \
   --set route.host=wingman.apps.example.com \
+  --set workflows.url=http://workflows-orchestrator-api.<ns>.svc:8080 \
+  --set serverScan.url=http://server-scan-api.<ns>.svc:8000 \
   --set image.day1.tag=<version> --set image.day2.tag=<version> --set image.web.tag=<version>
 ```
 
@@ -82,10 +87,9 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `gitlab.day2GitopsBranch` | `DAY2_GITOPS_BRANCH` | `main` | The branch the platform reads; day2's MRs target it |
 | `gitlab.verifyTls` | `GITLAB_VERIFY_TLS` | `true` | An internal CA goes in `tls.caBundle`, not here |
 | `gitlab.webhookSecret` | `GITLAB_WEBHOOK_SECRET` (Secret) | `""` | Empty: day1's GitLab webhook answers 404 |
-| `environment` | `WINGMAN_ENVIRONMENT` | `production` | `production` refuses the in-memory GitLab (ADR-0009) |
+| `environment` | `WINGMAN_ENVIRONMENT` | `production` | `production` refuses the in-memory GitLab (ADR-0009); only `development` may leave `workflows.url` empty (ADR-0042) |
 | `day1.clusterNameStripPrefix` | `DAY1_CLUSTER_NAME_STRIP_PREFIX` | `ocp4-` | ADR-0015: `""` for the GitHub sandbox |
 | `day1.cacheTtlSeconds` | `DAY1_CACHE_TTL_SECONDS` | `30` | Per replica, at most 60 (ADR-0011) |
-| `day1.provisioner` | `DAY1_PROVISIONER` | `merge-request` | How a create is proposed (ADR-0042): `merge-request` (Wingman opens the MR) or `workflow` (Wingman starts the platform's `provision-cluster` workflow, which opens it). `workflow` needs `workflows.url` |
 | `day1.upgrades.enabled` | `DAY1_UPGRADES` | `false` | Upgrades through the platform's `upgrade-cluster` workflow (ADR-0055): the cluster page starts it, shows its run and sends its decisions, and an edit may no longer change `mastertag` or a `workertag`. Needs `workflows.url`; the workflow must read the same day1 repo as Wingman. On, the Route's timeout is 130 s (`haproxy.router.openshift.io/timeout`), for the targets read |
 | `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), checked with `clusterStatus.enabled` (without it, not checked): the cost of one hosted control plane. An MCE is offered for a new cluster only with at least this many free pods (allocatable less in use) on its workers: masters, infra nodes and tainted, cordoned or NotReady nodes are left out ([Live cluster status](#live-cluster-status-mce-hubs)) |
 | `day1.addServers.enabled` | `DAY1_ADD_SERVERS` | `false` | Inventory Management (ADR-0057): admins add servers to an MCE's InfraEnv pool by starting the platform's `add-server-to-mce` workflow, by count or by name. Needs `workflows.url`; the page needs `serverScan.url`, and the InfraEnvs come from the MCE (`clusterStatus.enabled`) |
@@ -115,7 +119,7 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token, for every read. Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
-| `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
+| `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. **Required**: every create starts its `provision-cluster` workflow (ADR-0042), and the chart fails without it unless `environment` is `development` (then creates start an in-memory stand-in that writes nothing). Node uninstall, upgrades, Scale and adding servers start its other workflows. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `workflows.targetsTimeoutSeconds` | `WORKFLOWS_TARGETS_TIMEOUT_SECONDS` | `65` | An upgrade's targets read, at most 120: the orchestrator waits up to 60 s for it. nginx gives that one path 130 s |
@@ -219,7 +223,7 @@ chart renders no NetworkPolicy (network restrictions are the site's; CLAUDE.md c
   `sslVerify` keys take either: `true`, `false`, `"true"`, `"false"` or a CA bundle path,
   rendered the same by one helper (before 3.33, a boolean `false` in `serverScan`,
   `workflows` or `segmentsManager` was silently turned into `"true"`);
-- a value outside its list (`environment`, `day1.provisioner`, the Route's TLS settings,
+- a value outside its list (`environment`, the Route's TLS settings,
   `pullPolicy`), its range (cache TTLs and timeouts at most 60 s, the upgrade targets' 120 s,
   `jwtExpiryHours` 1 to 24, a Quick Links section's `columns` 1 to 6) or its shape (URLs, host
   names, Kubernetes names, image tags and digests, Prometheus durations, `openshiftApiHost`
@@ -229,7 +233,8 @@ Keys an older release documented and then dropped are accepted and ignored, mark
 in the schema: `quickLinks.status`, `quickLinks.sslVerify`, `quickLinks.argocdTokensSecret` and a
 link's `ping` and `argocd` (3.13.1), `day1.serverScanRefresh`, `day1.segmentsArea`,
 `day1.serverScanArea` and `serverScan.tokenSecret.adminKey` and `auditorKey` (the Segments
-and Server Scan areas, removed in 3.52.1), and the legacy chart's `cache`, `paths`,
+and Server Scan areas, removed in 3.52.1), `day1.provisioner` (3.56.0: every create starts
+the provision-cluster workflow), and the legacy chart's `cache`, `paths`,
 `gitlab.defaultBranch`, `gitlab.sslVerify` and `clusterStatus.clusterNamePrefix`. Delete them
 when convenient.
 
@@ -378,11 +383,11 @@ marks that MCE unreadable and never picks it; the other MCEs are not affected. A
 
 ### Cluster nodes (server-scan and the workflows orchestrator)
 
-A cluster's nodes come from its MCE ([Live cluster status](#live-cluster-status-mce-hubs)). Both of
-these are optional and off by default. With `serverScan.url`, day1 adds each node's server record
-from server-scan (health, a link to its page) and the servers server-scan places in the cluster that
-no Machine leads to; with `workflows.url`, it also starts the platform's `uninstall-server-from-hc`
-workflow for one of them and shows its run. The orchestrator has no auth. An uninstall checks the
+A cluster's nodes come from its MCE ([Live cluster status](#live-cluster-status-mce-hubs)). With
+`serverScan.url`, day1 adds each node's server record from server-scan (health, a link to its
+page) and the servers server-scan places in the cluster that no Machine leads to; with
+`workflows.url` (required, since every create starts provision-cluster there), it also starts the
+platform's `uninstall-server-from-hc` workflow for one of them and shows its run. The orchestrator has no auth. An uninstall checks the
 server in server-scan first, so `workflows.url` without `serverScan.url` fails the chart.
 
 The server-scan token never goes in values: put a viewer token in a Secret and name the Secret.

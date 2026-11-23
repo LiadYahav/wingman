@@ -27,12 +27,13 @@ data:
   # production's ApplicationSet strips "ocp4-"; the GitHub sandbox keeps it ("").
   DAY1_CLUSTER_NAME_STRIP_PREFIX: {{ .Values.day1.clusterNameStripPrefix | quote }}
   DAY1_CACHE_TTL_SECONDS: {{ .Values.day1.cacheTtlSeconds | quote }}
-  # How a create is proposed (ADR-0042): Wingman's merge request, or the
-  # platform's provision-cluster workflow (which needs workflows.url).
-  {{- if and (eq (.Values.day1.provisioner | default "merge-request") "workflow") (not (and .Values.workflows .Values.workflows.url)) }}
-  {{- fail "day1.provisioner workflow needs workflows.url: creates start the provision-cluster workflow there" }}
+  # Every create starts the platform's provision-cluster workflow (ADR-0042,
+  # amended 2026-11-23), so workflows.url is required; only environment:
+  # development runs without it, on an in-memory stand-in that writes nothing.
+  # day1.provisioner, which chose Wingman's own merge request, renders nothing.
+  {{- if and (ne .Values.environment "development") (not (and .Values.workflows .Values.workflows.url)) }}
+  {{- fail "workflows.url is required: a create starts the platform's provision-cluster workflow there (ADR-0042); only environment: development runs without it" }}
   {{- end }}
-  DAY1_PROVISIONER: {{ .Values.day1.provisioner | default "merge-request" | quote }}
   # MCE placement (ADR-0050): the free pods an MCE needs to be offered for a new
   # cluster. 70 for values kept from a release before it (0 is kept as 0).
   PLACEMENT_MIN_FREE_PODS: {{ if kindIs "invalid" .Values.day1.placementMinFreePods }}"70"{{ else }}{{ .Values.day1.placementMinFreePods | quote }}{{ end }}
@@ -50,8 +51,9 @@ data:
   DAY1_ADD_SERVERS: {{ if and .Values.day1.addServers .Values.day1.addServers.enabled }}"true"{{ else }}"false"{{ end }}
   # Scaling NodePools through update-nodepool (ADR-0062): on by default since
   # 3.53.0 wherever workflows.url is set (values kept from a release before it
-  # included), and off without it, with no failure: there is nothing to start
-  # it on. day1.scaleNodepools.enabled false turns it off.
+  # included), and off without it (environment: development only), with no
+  # failure: there is nothing to start it on. day1.scaleNodepools.enabled false
+  # turns it off.
   DAY1_SCALE_NODEPOOLS: {{ if and .Values.workflows .Values.workflows.url (or (not .Values.day1.scaleNodepools) (ne (toString .Values.day1.scaleNodepools.enabled) "false")) }}"true"{{ else }}"false"{{ end }}
   # A nodepool may draw from several InfraEnvs (ADR-0064). Off for values kept
   # from a release before it.
@@ -99,7 +101,7 @@ data:
   SERVER_SCAN_TIMEOUT_SECONDS: {{ .Values.serverScan.timeoutSeconds | default 10 | quote }}
   {{- end }}
 
-  # ── Node uninstall through the workflows orchestrator ────────────────────────
+  # ── The workflows orchestrator: create, uninstall, upgrades, Scale, servers ──
   {{- if and .Values.workflows .Values.workflows.url }}
   {{- if not (and .Values.serverScan .Values.serverScan.url) }}
   {{- fail "workflows.url needs serverScan.url: an uninstall checks the server in server-scan first" }}

@@ -14,7 +14,6 @@ import type {
   DeleteWorkflowState,
   FleetUpgrades,
   ProvisionRun,
-  Provisioner,
   StartUpgradeRequest,
   UninstallNodeRequest,
   UpgradeDecision,
@@ -24,14 +23,12 @@ import type {
   UpgradeTargets,
   WorkflowRun,
 } from "@/types";
-import { CLUSTERS, clusterPath } from "./clusters";
+import { clusterPath } from "./clusters";
 
 const deleteWorkflowPath = (name: string, where: string) => `${clusterPath(name)}/delete-workflow${where}`;
 const upgradeRunPath = (name: string) => `${clusterPath(name)}/upgrade-run`;
 
 export const clusterWorkflowsApi = {
-  /** What Create does in this deployment. */
-  provisioner: () => api.get<Provisioner>(`${CLUSTERS}/provisioner`),
   provisionRun: (name: string) => api.get<ProvisionRun>(`${clusterPath(name)}/provision-run`),
   /** 501 FEATURE_DISABLED until the delete-cluster workflow exists. */
   deleteWorkflow: (name: string, where: string) => api.get<DeleteWorkflowState>(deleteWorkflowPath(name, where)),

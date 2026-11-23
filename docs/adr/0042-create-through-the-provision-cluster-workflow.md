@@ -1,7 +1,7 @@
 # ADR-0042: A new cluster can be created by starting the provision-cluster workflow, behind a setting
 
 Date: 2026-11-12
-Status: Accepted; extends ADR-0017 (the provisioner's switch to a workflow); amended 2026-11-13: Wingman sees the workflow's merge request (see the amendment)
+Status: Accepted; extends ADR-0017 (the provisioner's switch to a workflow); amended 2026-11-13: Wingman sees the workflow's merge request; amended 2026-11-23: the workflow is the only way to create, the orchestrator is required and Wingman's create merge request is removed (see the amendments)
 
 ## Context
 
@@ -150,3 +150,89 @@ unlabelled MR on another branch ignored);
 `apps/day1-service/tests/api/test_placement_api.py`
 (`test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner`);
 `apps/web/e2e/tests/approvals.spec.ts` (the badge and the GitLab link).
+
+## Amendment (2026-11-23): the workflow is the only way, and the orchestrator is required
+
+**Every create starts `provision-cluster`. `WORKFLOWS_API_URL` is
+required, and Wingman's own create merge request is removed.**
+
+The user: "Wingman default mode should be the day1 workflows! It's
+production! Let's make it dependency and remove the old way completely,
+save us code base!"
+
+**Why.** Since team-redbull/workflows `ff1aba7` (2026-11-11) allocate-segment
+no longer writes to Git: it refuses `values_branch` with a 422, and the
+platform's guide stops the day1 CI from calling it. A merge request
+Wingman opened therefore never got its `vlanId` and `dhcp_values`. The
+segment is now reserved by `provision-cluster`, which appends both keys to
+the file in the commit that pushes it on `provision-cluster/<stem>`.
+`provision-cluster` is in production.
+
+1. **One create.** `POST /api/day1/clusters` renders and checks the file as
+   before (the preview runs every check a create runs), then starts the
+   workflow and answers `202` with the run. It never answers `201` with a
+   merge request again. `GET /clusters/{name}/provision-run` stays.
+2. **The orchestrator is required.**
+   - Day1 refuses to start in production without `WORKFLOWS_API_URL`
+     (`check_runtime`, ADR-0009).
+   - The chart fails its render without `workflows.url` unless
+     `environment` is `development`.
+   - In development and tests, without the orchestrator (or with
+     `DAY1_FAKE_FLEET`), the in-memory `FakeProvisionWorkflow` stands in:
+     its runs walk sample phases and write nothing to Git.
+   - The rule that `workflows.url` needs `serverScan.url` (an uninstall
+     checks the server first, ADR-0038) still holds, so a production
+     install sets both.
+3. **Removed, because only Wingman's create used them.**
+   - the setting `DAY1_PROVISIONER`, its validator and `GET
+     /clusters/provisioner` (now a 404);
+   - `ClusterAction.CREATE`, so a `ClusterChange` always replaces or removes
+     an existing file, guarded by its read;
+   - the create branches of the merge-request writer
+     (`create-cluster` branch, `Create cluster … from spec` title and
+     commit, the new-file change);
+   - the create MR's description: its review summary and its "MCE
+     placement" section (the placement's record is the
+     `mce_placement_chosen` log line and the metric, ADR-0050);
+   - counting Wingman's own open create MRs by their title (the "already
+     being created" check, the name suggestion's taken set, placement):
+     only the workflow's, by their branch, are counted now;
+   - a review edit's exemption for a cluster file not yet on the target
+     branch (ADR-0055, ADR-0062): Wingman opens no such merge request.
+4. **Kept.**
+   - Wingman's own merge requests for every other change: modify, delete,
+     sync, import, a flavor's rollout, the specs project and day2.
+   - `wingman_core.domain.mr_conventions` unchanged: its builders serve
+     those changes and its parsers still read the `Create cluster` merge
+     requests in GitLab's history (the audit view).
+   - Everything that finds the workflow's merge request by its branch
+     (the 2026-11-13 amendment): name holds, "already being created",
+     placement counts, the Approvals row.
+   - `day1.provisioner` in `values.schema.json`, deprecated: accepted, ignored,
+     rendering nothing (ADR-0059's rule for dropped keys).
+
+**Checked against the workflow.** team-redbull/workflows main at
+`29ef001`: the request still matches (`POST
+/workflows/cluster-lifecycle/provision-cluster?cluster=&mce=`, the file as
+an `application/yaml` body, `202 {workflow_id, run_id}`, 409, 422), as do
+the run read, the workflow id `provision-cluster-<stem>` and the branch
+`provision-cluster/<stem>`. The workflow names its merge request's state
+`open`, `merged` or `closed` (not GitLab's `opened`), which Wingman shows as
+it comes; the fake now says `open` too.
+
+**Rejected:** keeping the merge-request create as an option for a platform
+without the workflow. Without allocate-segment writing to Git it creates a
+file with no segment, and the user asked for one way.
+
+**Verification:**
+`apps/day1-service/tests/api/test_provision_workflow_api.py` (every create
+starts the workflow with the previewed file; `/clusters/provisioner` is
+gone); `apps/day1-service/tests/api/test_cluster_lifecycle.py` (create,
+the workflow's merge request holding the name, its merge, an edit and a
+delete); `apps/day1-service/tests/unit/test_main.py` and
+`tests/unit/test_settings.py` (production refuses to start without the
+orchestrator; development stands in the fake);
+`tests/repo/test_chart_env_contract.py` and `tests/repo/test_chart_schema.py`
+(the chart's refusal, development without it, `day1.provisioner`
+accepted and ignored); `apps/web/e2e/tests/provision-workflow.spec.ts` and
+`cluster-creation.spec.ts` (Create always shows the run).

@@ -232,16 +232,22 @@ def test_the_orchestrator_without_server_scan_is_refused() -> None:
     assert dev(workflows_api_url=WORKFLOWS, day1_fake_fleet=True).day1_fake_fleet
 
 
-def test_creates_start_the_workflow_only_with_an_orchestrator() -> None:
-    """ADR-0042: merge requests by default; ``workflow`` needs WORKFLOWS_API_URL."""
-    assert dev().day1_provisioner == "merge-request"
-    with pytest.raises(ValidationError, match="DAY1_PROVISIONER=workflow needs WORKFLOWS_API_URL"):
-        dev(day1_provisioner="workflow")
-    on = dev(day1_provisioner="workflow", workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
-    assert on.day1_provisioner == "workflow"
-    assert dev(day1_provisioner="workflow", day1_fake_fleet=True).day1_provisioner == "workflow"
-    with pytest.raises(ValidationError):
-        dev(day1_provisioner="temporal")
+def test_production_needs_the_orchestrator_for_creates() -> None:
+    """ADR-0042, amended 2026-11-23: every create starts provision-cluster, so production
+    refuses to start without WORKFLOWS_API_URL; development and tests run without it."""
+    production = RuntimeSettings(environment=Environment.PRODUCTION)
+    with pytest.raises(ValueError, match="WORKFLOWS_API_URL is required"):
+        check_runtime(dev(), production)
+    check_runtime(dev(workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN), production)
+    for environment in (Environment.DEVELOPMENT, Environment.TEST):
+        check_runtime(dev(), RuntimeSettings(environment=environment))
+
+
+def test_the_dropped_provisioner_setting_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``DAY1_PROVISIONER`` (3.7.0 to 3.55) chose Wingman's create MR; a ConfigMap kept from
+    then still starts, and nothing reads it."""
+    monkeypatch.setenv("DAY1_PROVISIONER", "merge-request")
+    assert not hasattr(dev(), "day1_provisioner")
 
 
 def test_upgrades_need_an_orchestrator_and_have_their_own_targets_timeout() -> None:
@@ -287,7 +293,8 @@ def test_the_fake_fleet_runs_in_development_with_either_git_backend() -> None:
     for backend in GitBackend:
         runtime = RuntimeSettings(environment=Environment.DEVELOPMENT, git_backend=backend)
         check_runtime(dev(day1_fake_fleet=True), runtime)
-    check_runtime(dev(), RuntimeSettings(environment=Environment.PRODUCTION))
+    production = RuntimeSettings(environment=Environment.PRODUCTION)
+    check_runtime(dev(workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN), production)
 
 
 def test_the_nodes_settings_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:

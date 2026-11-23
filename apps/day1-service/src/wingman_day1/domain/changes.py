@@ -1,9 +1,9 @@
-"""The changes day1 asks for: a cluster created, modified or deleted; a spec likewise.
+"""The changes day1 asks for: an existing cluster modified or deleted; a spec created or changed.
 
-They say *what* should change, not how. Today a :class:`ClusterChange`
-becomes one commit on a new branch plus a merge request (Wingman owns
-day1); when the team's ``create-cluster`` workflow exists, the same change
-can start that workflow instead (ADR-0017).
+They say *what* should change, not how: a :class:`ClusterChange` becomes one
+commit on a new branch plus a merge request (ADR-0017). A new cluster is not
+one: a create starts the platform's provision-cluster workflow, which opens
+its own merge request (ADR-0042).
 """
 
 from __future__ import annotations
@@ -17,9 +17,8 @@ from wingman_day1.domain.paths import ClusterRef
 
 
 class ClusterAction(StrEnum):
-    """What happens to a cluster file; the values are the MR label and footer action."""
+    """What happens to an existing cluster file; the values are the MR label and footer action."""
 
-    CREATE = "create"
     MODIFY = "modify"
     DELETE = "delete"
     SYNC = "sync"
@@ -38,10 +37,10 @@ class SpecAction(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ClusterChange:
-    """One cluster file to create, replace or remove, on behalf of a user.
+    """One existing cluster file to replace or remove, on behalf of a user.
 
-    ``last_commit_id`` is the commit the caller read the file at; a modify or
-    delete fails with a revision conflict if the file moved since (ADR-0006).
+    ``last_commit_id`` is the commit the caller read the file at; the change
+    fails with a revision conflict if the file moved since (ADR-0006).
     """
 
     action: ClusterAction
@@ -57,10 +56,8 @@ class ClusterChange:
     def __post_init__(self) -> None:
         """Reject combinations that cannot be applied."""
         if (self.action is ClusterAction.DELETE) != (self.content is None):
-            raise ValueError("a delete carries no content; a create or modify needs content")
-        if self.action is ClusterAction.CREATE and self.last_commit_id is not None:
-            raise ValueError("a create has no previous revision")
-        if self.action is not ClusterAction.CREATE and not self.last_commit_id:
+            raise ValueError("a delete carries no content; every other change needs content")
+        if not self.last_commit_id:
             raise ValueError(f"a {self.action} needs the last_commit_id it was read at")
         if self.action is ClusterAction.IMPORT and not (self.spec_name and self.spec_version):
             raise ValueError("an import names the flavor and version it links the file to")

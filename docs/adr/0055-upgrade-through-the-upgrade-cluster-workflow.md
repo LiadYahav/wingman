@@ -1,7 +1,7 @@
 # ADR-0055: Upgrade a hosted cluster through the upgrade-cluster workflow, behind a setting
 
 Date: 2026-11-13
-Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page; 3.20.0: upgrades inside the clusters list, its Upgrades view removed); amended by ADR-0038 (2026-11-23: a viewer's run has no agent proposals, and its current NodePool links nowhere)
+Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page; 3.20.0: upgrades inside the clusters list, its Upgrades view removed); amended by ADR-0038 (2026-11-23: a viewer's run has no agent proposals, and its current NodePool links nowhere); amended by ADR-0042 (2026-11-23: Wingman opens no create MR, so the review edit of one in decision 4 is gone; a create still writes the starting `mastertag`)
 
 ## Context
 

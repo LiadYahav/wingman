@@ -1,9 +1,10 @@
 """A cluster's network: read from its file, checked against segments-manager (ADR-0039).
 
-Git is the source of truth. The allocate-segment workflow writes ``vlanId``
-and ``dhcp_values.network`` into the cluster file on the MR branch, and the
-cluster's segment is that network as a /24: segments-manager's segments are
-always /24 (``docs/ecosystem/notes/segments-manager.md``).
+Git is the source of truth. The provision-cluster workflow writes ``vlanId``
+and ``dhcp_values.network`` into a new cluster file before it pushes it on its
+branch (ADR-0042), and the cluster's segment is that network as a /24:
+segments-manager's segments are always /24
+(``docs/ecosystem/notes/segments-manager.md``).
 
 segments-manager only adds what the file does not carry, the ACI EPG, and is
 checked against the file: what it says that disagrees with Git becomes a
@@ -51,7 +52,7 @@ def vlan_of(raw: object) -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class FileNetwork:
-    """The cluster's network as its file has it; ``None`` until allocate-segment has written it."""
+    """The cluster's network as its file has it; ``None`` where no workflow has written it."""
 
     vlan_id: int | None
     segment: str | None

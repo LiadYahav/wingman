@@ -47,7 +47,7 @@ export function ClustersSection() {
             this deployment does not read the MCEs live, one line under the table says free pods and servers were
             not checked, and the pick rests on the rest. An MCE that fails a check says why in a few words
             (<InlineCode>no 4.18.56</InlineCode>) and cannot be chosen. An admin may choose another MCE that
-            passes, with a reason; the merge request records the numbers, the pick and the reason.
+            passes, with a reason; day1&apos;s log records the numbers, the pick and the reason.
           </p>
           <p className="mt-2">
             Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them, and an
@@ -88,16 +88,16 @@ export function ClustersSection() {
           <strong>Full Values</strong> for YAML). They are recorded in the cluster file&apos;s header and used
           when the addons are installed: installing them is a Day2 change, from the cluster&apos;s Drift tab.
         </Step>
-        <Step n={5} title="Review and open the MR">
+        <Step n={5} title="Review and start provision-cluster">
           <strong>Review &amp; Create</strong> runs every check a create runs and opens{" "}
-          <strong>Review: Create Cluster</strong>, which shows the exact file the MR adds.{" "}
-          <strong>Confirm — Create Cluster MR</strong> opens it and takes you to its approval page. Where your operator
-          sends creates through the platform&apos;s workflow, the button starts it instead:{" "}
+          <strong>Review: Create Cluster</strong>, which shows the exact file the platform&apos;s workflow receives.{" "}
+          <strong>Confirm — Start provision-cluster</strong> starts it, and the page then shows the run: its phase,
+          the merge request once the workflow opens one, and its error. See{" "}
           <a href="#cluster-workflows" className="text-primary hover:underline">Create through provision-cluster</a>.
         </Step>
       </div>
 
-      <CodeBlock language="The file the MR adds — ocp4-prod-herzi-site1.yaml">
+      <CodeBlock language="The file the workflow receives — ocp4-prod-herzi-site1.yaml">
 {`# specName: "agent-standard"
 # specVersion: "1.0.0"
 # wingmanAddons: [{"name": "cluster-roles", "override_values": {}, "team": "redbull", "version": "main"}]
@@ -134,7 +134,7 @@ nodepool:
           },
           {
             who: "Automation, on the MR branch",
-            keys: "vlanId and dhcp_values (the allocate-segment workflow); mcConfigMap, mcFiles and tuningConfigmap (the day1 CI, from mc-files/ and tuning/). Wingman never writes them, and an edit that changes or removes one is refused.",
+            keys: "vlanId and dhcp_values (the provision-cluster workflow, in the commit that pushes a new file); mcConfigMap, mcFiles and tuningConfigmap (the day1 CI, from mc-files/ and tuning/). Wingman never writes them, and an edit that changes or removes one is refused.",
           },
           {
             who: "The file's path",
@@ -149,8 +149,9 @@ nodepool:
       </div>
       <Callout type="info" title="VLAN and DHCP show as pending">
         The cluster page shows <strong>VLAN</strong> and <strong>DHCP network</strong> as{" "}
-        <strong>pending</strong> until the allocate-segment workflow has written them. Approve a create MR once
-        the workflow and CI have committed to its branch: the review dialog says so too.
+        <strong>pending</strong> while the file has neither. The provision-cluster workflow writes both when it pushes a
+        new file, so a cluster created through Wingman has them; a file pushed some other way may not. Merge the
+        workflow&apos;s MR in GitLab once CI has committed to its branch.
       </Callout>
 
       <ClusterPageDocs />
@@ -209,7 +210,7 @@ function ClusterPageDocs() {
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         The Overview tab&apos;s <strong>HostedCluster &amp; network</strong> card shows the HostedCluster&apos;s name and
         namespace, the <InlineCode>clusterName</InlineCode>, and the file&apos;s <strong>VLAN</strong> and{" "}
-        <strong>Segment</strong>, which are pending until the allocate-segment workflow writes them. When segments-manager
+        <strong>Segment</strong>, which are pending while the file has none (the provision-cluster workflow writes them). When segments-manager
         is configured (<InlineCode>SEGMENTS_MANAGER_URL</InlineCode>), the card adds the segment&apos;s{" "}
         <strong>EPG</strong> from segments-manager and checks its record against the file. Each disagreement is a warning
         line under the rows: segments-manager has no such segment, or does not mark it Allocated, or gives it to

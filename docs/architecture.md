@@ -68,9 +68,10 @@ each under
 `apps/day1-service/src/wingman_day1/integrations/` (ADR-0001's 2026-11-17
 amendment); the other adapters are in `wingman_day1/infrastructure/`. All are
 built in the composition root (`main.py`, `platform_adapters.py`,
-`compose_*.py`, each integration's `compose.py`). Every platform system's
-switch is off by default: with all of them off, Wingman needs only GitLab and
-OpenShift OAuth.
+`compose_*.py`, each integration's `compose.py`). Wingman needs GitLab,
+OpenShift OAuth and the workflows orchestrator, where every create starts
+provision-cluster (ADR-0042); every other platform system's switch is off by
+default.
 
 | System | Adapter | Switch | What Wingman does with it |
 |---|---|---|---|
@@ -80,16 +81,17 @@ OpenShift OAuth.
 | OpenShift OAuth | `openshift_oauth.py` | the OpenShift OAuth settings, or dev login | Login only (below). |
 | server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN` | Read only, with the viewer token: its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050) and Inventory Management's pools (ADR-0057); a node's server links to its page in server-scan's own UI, and an admin's top bar to that UI. Never `/servers/available` or a reservation: those are the workflows'. The version Wingman matches and how to sync: [integrations/server-scan.md](integrations/server-scan.md). |
 | segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, one open GET: a cluster's EPG checked against its file (ADR-0039); the cluster page and an admin's top bar link to its own UI. The commit Wingman matches and how to sync: [integrations/segments-manager.md](integrations/segments-manager.md). |
-| workflows orchestrator | one adapter per workflow: `workflows_api.py`, `provision_workflow.py`, `upgrade_workflow.py`, `add_server_workflow.py`, `scale_workflow.py` | `WORKFLOWS_API_URL`, plus each workflow's own switch (next table) | Starts a run and shows it in the workflow's words; never re-implements its procedure, checks or phases. The orchestrator has no auth (accepted); day1 lets only admins start a run and logs who did. |
+| workflows orchestrator | one adapter per workflow: `workflows_api.py`, `provision_workflow.py`, `upgrade_workflow.py`, `add_server_workflow.py`, `scale_workflow.py` | `WORKFLOWS_API_URL` (required), plus each workflow's own switch (next table) | Starts a run and shows it in the workflow's words; never re-implements its procedure, checks or phases. The orchestrator has no auth (accepted); day1 lets only admins start a run and logs who did. |
 | cluster-navigator | none | none | Not wired. Its data on the cluster page is planned (`docs/ideas/single-pane.md`, workstream 5). |
 | herzi | none | none | No adapter: its add-server runs are in the orchestrator's run list, which Inventory Management shows (ADR-0057). |
 
-The workflows Wingman starts. Each switch needs `WORKFLOWS_API_URL`, and
-day1 refuses to start without it (ADR-0009):
+The workflows Wingman starts. `WORKFLOWS_API_URL` is required: day1 refuses
+to start in production without it (ADR-0009, ADR-0042), and in development an
+in-memory provision-cluster stands in. Each switch needs it too:
 
 | Workflow | Switch | Where | ADR |
 |---|---|---|---|
-| `provision-cluster` | `DAY1_PROVISIONER=workflow` (default `merge-request`) | Create | ADR-0042 |
+| `provision-cluster` | none: every create starts it | Create | ADR-0042 |
 | `upgrade-cluster` | `DAY1_UPGRADES` | the cluster page, the clusters list | ADR-0055 |
 | `uninstall-server-from-hc` | `WORKFLOWS_API_URL` with `SERVER_SCAN_URL` | the Nodes tab | ADR-0038 |
 | `add-server-to-mce` | `DAY1_ADD_SERVERS` | Inventory Management | ADR-0057 |
@@ -211,7 +213,7 @@ fake; a router never calls a client. Files and functions stay small
   `504 AMBIGUOUS_WRITE`: re-read, do not resend. Workflow starts follow the
   same rule.
 - **People and automation own different keys** of a cluster file (ADR-0012):
-  `vlanId` and `dhcp_values` are the allocate-segment workflow's, `mcFiles`,
+  `vlanId` and `dhcp_values` are the provision-cluster workflow's, `mcFiles`,
   `mcConfigMap` and `tuningConfigmap` the day1 CI's. With `DAY1_UPGRADES` the
   versions are upgrade-cluster's, and while Scale is on (by default, wherever
   the orchestrator is) an existing NodePool's replicas are update-nodepool's. Wingman never writes them, and
@@ -222,8 +224,9 @@ fake; a router never calls a client. Files and functions stay small
   `excludeAgentLabels`, which a create writes from
   `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065).
 - **Not every change is Wingman's MR.** Some workflows commit to day1
-  themselves (upgrade-cluster and update-nodepool to `main`, allocate-segment
-  to an MR's branch); server-scan and segments-manager are never written.
+  themselves (upgrade-cluster and update-nodepool to `main`); provision-cluster
+  pushes a new file on its own branch and opens its own MR (every create);
+  server-scan and segments-manager are never written.
 
 ## Three requests, end to end
 
@@ -262,10 +265,11 @@ sequenceDiagram
    does the rest. With `CLUSTER_STATUS_ENABLED`, the cluster page reads the
    result from the hub (`GET /api/day1/clusters/{name}/status`, or its stream).
 
-A create is the same with `POST /api/day1/clusters`, unless
-`DAY1_PROVISIONER=workflow`: then day1 checks the file as before and starts
-provision-cluster, which reserves the segment and opens the MR itself
-(ADR-0042).
+A create is not Wingman's MR: `POST /api/day1/clusters` checks the new file
+as the preview does and starts provision-cluster, which reserves the segment,
+pushes the file with its `vlanId` and `dhcp_values` on
+`provision-cluster/<file stem>` and opens the MR itself. Approvals lists that
+MR, view only; it is reviewed and merged in GitLab (ADR-0042).
 
 ### A cluster's servers: the Nodes tab
 

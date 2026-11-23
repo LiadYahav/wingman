@@ -38,9 +38,7 @@ DAY1 = "gitops-day1/platform-config"
 SPECS = "wingman/cluster-specs"
 NOW = datetime(2026, 11, 7, 14, 30, 22, tzinfo=UTC)
 ALICE = User(username="alice", role=Role.ADMIN, full_name="Alice Admin")
-NEW = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-falcon-site1")
 HERZI = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-herzi-site1")
-CONTENT = "mastertag: 4.18.22\nnodepool:\n  - infraEnvName: pool\n"
 
 
 def clock() -> datetime:
@@ -66,64 +64,64 @@ def provisioner(gitlab: InMemoryGitLab, day1: CachedRepository) -> GitClusterPro
     )
 
 
-def create(ref: ClusterRef = NEW) -> ClusterChange:
+async def modify(gitlab: InMemoryGitLab, ref: ClusterRef = HERZI) -> ClusterChange:
+    """Alice's change of ``ref``'s file on main: a new release."""
+    project = await gitlab.get_project(DAY1)
+    current = await gitlab.read_file(project.id, ref.path, "main")
     return ClusterChange(
-        ClusterAction.CREATE,
+        ClusterAction.MODIFY,
         ref,
         ALICE,
-        "Creating it.",
-        content=CONTENT,
-        spec_name="agent-standard",
-        spec_version="1.0.0",
+        "Bumping it.",
+        content=current.content.replace("4.16.27", "4.16.28"),
+        last_commit_id=current.last_commit_id,
     )
 
 
-async def test_a_create_is_one_commit_adding_exactly_the_cluster_file(
+async def test_a_change_is_one_commit_changing_exactly_the_cluster_file(
     gitlab: InMemoryGitLab, provisioner: GitClusterProvisioner
 ) -> None:
     project = await gitlab.get_project(DAY1)
     main_before = gitlab.snapshot(project.id, "main")
-    mr = (await provisioner.apply(create())).merge_request
+    mr = (await provisioner.apply(await modify(gitlab))).merge_request
     branch = gitlab.snapshot(project.id, mr.source_branch)
-    assert {p: c for p, c in branch.items() if p != str(NEW.path)} == main_before
-    assert branch[str(NEW.path)] == CONTENT
+    assert {p: c for p, c in branch.items() if p != str(HERZI.path)} == {
+        p: c for p, c in main_before.items() if p != str(HERZI.path)
+    }
+    assert "4.16.28" in branch[str(HERZI.path)]
     assert gitlab.snapshot(project.id, "main") == main_before
     head = (await gitlab.list_commits(project.id, ref=mr.source_branch, limit=1))[0]
     main_head = (await gitlab.list_commits(project.id, ref="main", limit=1))[0]
     assert head.parent_ids == (main_head.id,)
     diff = await gitlab.commit_diff(project.id, head.id)
-    assert [(str(d.new_path), d.new_file) for d in diff] == [(str(NEW.path), True)]
+    assert [(str(d.new_path), d.new_file) for d in diff] == [(str(HERZI.path), False)]
 
 
 async def test_the_mr_follows_the_conventions_and_parses_back(
     gitlab: InMemoryGitLab, provisioner: GitClusterProvisioner
 ) -> None:
-    mr = (await provisioner.apply(create())).merge_request
-    assert (
-        mr.source_branch == "platform/alice/create-cluster-ocp4-prod-falcon-site1-20261107T143022"
-    )
+    mr = (await provisioner.apply(await modify(gitlab))).merge_request
+    assert mr.source_branch == "platform/alice/modify-cluster-ocp4-prod-herzi-site1-20261107T143022"
     assert mr.target_branch == "main"
-    assert (
-        mr.title == "[Wingman/Day1] Create cluster ocp4-prod-falcon-site1 from spec agent-standard"
-    )
+    assert mr.title == "[Wingman/Day1] Modify cluster ocp4-prod-herzi-site1"
     title = parse_mr_title(mr.title)
     assert title is not None
     assert (title.repo, title.verb, title.resource_type, title.resource_name) == (
         Repo.DAY1,
-        Verb.CREATE,
+        Verb.MODIFY,
         ResourceType.CLUSTER,
-        NEW.name,
+        HERZI.name,
     )
     footer = parse_mr_description(mr.description)
     assert footer is not None
     assert (footer.author, footer.action, footer.resource_name, footer.repo) == (
         "alice",
-        "create",
-        NEW.name,
+        "modify",
+        HERZI.name,
         Repo.DAY1,
     )
-    assert mr.description.startswith("Creating it.")
-    assert mr.labels == ("create", "day1", "wingman")
+    assert mr.description.startswith("Bumping it.")
+    assert mr.labels == ("day1", "modify", "wingman")
     assert mr.state is MRState.OPENED
 
 
@@ -131,12 +129,12 @@ async def test_the_commit_is_authored_by_the_requesting_user(
     gitlab: InMemoryGitLab, provisioner: GitClusterProvisioner
 ) -> None:
     project = await gitlab.get_project(DAY1)
-    mr = (await provisioner.apply(create())).merge_request
+    mr = (await provisioner.apply(await modify(gitlab))).merge_request
     head = (await gitlab.list_commits(project.id, ref=mr.source_branch, limit=1))[0]
     assert (head.author_name, head.author_email) == ("Alice Admin", "alice@openshift.local")
-    assert head.title == "Create cluster ocp4-prod-falcon-site1 from spec agent-standard"
+    assert head.title == "Modify cluster ocp4-prod-herzi-site1"
     assert "Site: site1, MCE: ocp4-prod-mce-site1-a" in head.message
-    assert "Spec: agent-standard v1.0.0" in head.message
+    assert "Spec:" not in head.message  # a modify names no flavor
     assert head.message.endswith("Requested-by: alice")
 
 
@@ -201,24 +199,36 @@ async def test_a_delete_removes_only_the_cluster_file(
 
 
 async def test_opening_an_mr_clears_the_cached_mr_lists(
-    day1: CachedRepository, provisioner: GitClusterProvisioner
+    gitlab: InMemoryGitLab, day1: CachedRepository, provisioner: GitClusterProvisioner
 ) -> None:
     assert await day1.merge_requests(state=MRState.OPENED, labels=("wingman",)) == []
-    mr = (await provisioner.apply(create())).merge_request
+    mr = (await provisioner.apply(await modify(gitlab))).merge_request
     listed = await day1.merge_requests(state=MRState.OPENED, labels=("wingman",))
     assert [m.ref for m in listed] == [mr.ref]
 
 
 async def test_changes_start_from_the_projects_default_branch_whatever_its_name() -> None:
     gitlab = InMemoryGitLab()
+    ref = ClusterRef("site1", "m", "c")
     gitlab.create_project(
-        DAY1, {"sites/site1/mces/m/values.yaml": "a: 1\n"}, default_branch="production"
+        DAY1,
+        {"sites/site1/mces/m/values.yaml": "a: 1\n", str(ref.path): "mastertag: 4.16.27\n"},
+        default_branch="production",
     )
     repo = CachedRepository(gitlab, TtlCache(), key="day1", project=DAY1, ttl=30)
     provisioner = GitClusterProvisioner(
         MergeRequestWriter(gitlab, repo, repo=Repo.DAY1, label="day1", clock=clock)
     )
-    mr = (await provisioner.apply(create(ClusterRef("site1", "m", "c")))).merge_request
+    current = await repo.read(ref.path)
+    change = ClusterChange(
+        ClusterAction.MODIFY,
+        ref,
+        ALICE,
+        "Bump.",
+        content="mastertag: 4.16.28\n",
+        last_commit_id=current.last_commit_id,
+    )
+    mr = (await provisioner.apply(change)).merge_request
     assert mr.target_branch == "production"
     project = await gitlab.get_project(DAY1)
     assert "sites/site1/mces/m/values.yaml" in gitlab.snapshot(project.id, mr.source_branch)

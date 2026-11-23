@@ -5,9 +5,8 @@ needs:
 
 - the candidates and the versions each hosts, from the day1 repo (ADR-0034);
 - each candidate's clusters and this owner's, from its cluster files and the
-  open merge requests that create a cluster there, Wingman's and the
-  provision-cluster workflow's (each MR's diff says where, and its file says
-  the owner);
+  provision-cluster workflow's open merge requests that create a cluster
+  there (each MR's diff says where, and its file says the owner);
 - each candidate's free pods, from its own nodes and pods, read when asked
   (a cache of seconds, shared; never the minutes another source would be);
 - each candidate's healthy free servers of every node type the new cluster
@@ -40,14 +39,7 @@ from typing import Final
 
 from wingman_core.domain.errors import GitError, NotFoundError
 from wingman_core.domain.git import FileDiff
-from wingman_core.domain.merge_request import MergeRequest, MRState
-from wingman_core.domain.mr_conventions import (
-    WINGMAN_LABEL,
-    Repo,
-    ResourceType,
-    Verb,
-    parse_mr_title,
-)
+from wingman_core.domain.merge_request import MergeRequest
 from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
@@ -442,16 +434,9 @@ class PlacementService:
     async def _open_creates(self) -> tuple[list[OpenCreate], list[str]]:
         """Every open MR that creates a cluster, where its file goes, and whose it is.
 
-        Wingman's own, by their title, and the provision-cluster workflow's, by
-        their branch (ADR-0042's amendment); one MR is counted once.
+        The provision-cluster workflow's, by their branch (ADR-0042's amendment).
         """
-        opened, provisions = await asyncio.gather(
-            self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,)),
-            provision_merge_requests(self._day1),
-        )
-        creates = [mr for mr in opened if _creates_a_cluster(mr)]
-        counted = {mr.ref for mr in creates}
-        creates += [p.merge_request for p in provisions if p.merge_request.ref not in counted]
+        creates = [p.merge_request for p in await provision_merge_requests(self._day1)]
         found = await asyncio.gather(*(self._open_create(mr) for mr in creates))
         return (
             [o for o, _ in found if o is not None],
@@ -482,12 +467,3 @@ class PlacementService:
             return await self._inventory.rows(), None
         except ServerScanUnavailableError as exc:
             return None, f"server-scan could not be read, so spare servers are unknown: {exc}"
-
-
-def _creates_a_cluster(mr: MergeRequest) -> bool:
-    title = parse_mr_title(mr.title)
-    return title is not None and (title.repo, title.verb, title.resource_type) == (
-        Repo.DAY1,
-        Verb.CREATE,
-        ResourceType.CLUSTER,
-    )
