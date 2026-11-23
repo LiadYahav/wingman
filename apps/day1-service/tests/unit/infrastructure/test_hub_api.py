@@ -17,7 +17,8 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
 )
 from wingman_day1.domain.status import Condition
-from wingman_day1.infrastructure.hub_api import HttpHubApi, MceAccess, load_mce_access
+from wingman_day1.infrastructure.hub_api import HttpHubApi
+from wingman_day1.infrastructure.mce_access import MceAccess, load_mce_access
 
 TOKEN = "sha256~hub-token-never-shown-0001"
 MCE = "ocp4-prod-mce-site1-a"
