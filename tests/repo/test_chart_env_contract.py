@@ -319,6 +319,31 @@ def test_fetch_now_is_off_unless_enabled_and_needs_server_scan() -> None:
     assert "serverScanRefresh" in wrong.stderr
 
 
+@pytest.mark.parametrize(
+    ("key", "variable", "needs"),
+    [
+        ("segmentsArea", "DAY1_SEGMENTS_AREA", "segmentsManager.url"),
+        ("serverScanArea", "DAY1_SERVER_SCAN_AREA", "serverScan.url"),
+    ],
+)
+def test_the_areas_are_off_unless_enabled_and_need_their_system(
+    key: str, variable: str, needs: str
+) -> None:
+    """ADR-0047 and ADR-0048's 2026-11-23 amendments: ``day1.<area>.enabled`` sets its variable,
+    off by default and for values kept from 3.50 that have no such key; on, it needs its system's
+    url; not a boolean, the schema refuses it."""
+    assert render()["wingman-config"]["data"][variable] == "false"
+    assert render("--set", f"day1.{key}=null")["wingman-config"]["data"][variable] == "false"
+    on = render(*ALL_ON, "--set", f"day1.{key}.enabled=true")["wingman-config"]["data"]
+    assert on[variable] == "true"
+    refused = template("--set", f"day1.{key}.enabled=true")
+    assert refused.returncode != 0
+    assert f"day1.{key}.enabled needs {needs}" in refused.stderr
+    wrong = template(*ALL_ON, "--set-string", f"day1.{key}.enabled=yes")
+    assert wrong.returncode != 0
+    assert key in wrong.stderr
+
+
 def test_excluded_agent_labels_are_label_keys_joined_with_commas() -> None:
     """ADR-0065: ``day1.excludedAgentLabels`` sets DAY1_EXCLUDED_AGENT_LABELS, empty by default
     and for values kept from a release before it; each must be a label key, at most 16."""

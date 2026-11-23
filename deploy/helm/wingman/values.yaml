@@ -148,6 +148,17 @@ day1:
   # route answers 501.
   serverScanRefresh:
     enabled: false
+  # The Segments and Server Scan areas (ADR-0047, ADR-0048; 2026-11-23): off,
+  # the team keeps segments-manager and server-scan apart from Wingman, so an
+  # admin's top bar links to each one's own UI in a new tab (segmentsManager.uiUrl
+  # and serverScan.uiUrl, else their url) and Wingman's /segments and
+  # /server-scan pages are not offered. On: the area inside Wingman, for
+  # admins, as before. Each needs its system's url. The cluster page's
+  # network and Nodes tab, placement and Inventory Management read them either way.
+  segmentsArea:
+    enabled: false
+  serverScanArea:
+    enabled: false
   # Agent label keys every agent NodePool excludes (ADR-0065): herzi's label for
   # used Agents, once herzi names it. Each new cluster's nodepools get
   # excludeAgentLabels (a DoesNotExist each); an existing cluster takes them

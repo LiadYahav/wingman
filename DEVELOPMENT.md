@@ -105,7 +105,10 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
 Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and node uninstall
 (ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
 hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
-`dev/fleet-fixtures/`:
+`dev/fleet-fixtures/`. The Segments and Server Scan areas below are off by default (the team
+keeps both systems apart; ADR-0047 and ADR-0048's 2026-11-23 amendments): the top bar then
+links to `http://segments-manager.example` and `http://server-scan.example`. Add
+`DAY1_SEGMENTS_AREA=true DAY1_SERVER_SCAN_AREA=true` to day1's line to see the areas:
 - `servers.yaml` is a made-up fleet in server-scan's own row shape, and its `sites` catalog
   (server-scan's configured sites): the Server Scan area's Sites page (`/server-scan`,
   ADR-0048) counts these rows by server-scan's rules over it; `site3` has no server, so its

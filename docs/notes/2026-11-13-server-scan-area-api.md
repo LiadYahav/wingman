@@ -24,6 +24,16 @@ fleet's audit trail, **Events** (§14, 3.31.0), and its CronJobs, **Jobs**
   `serverScan.url`) every route answers `501 FEATURE_DISABLED`, as the other
   optional features do, and the web hides the area. With `DAY1_FAKE_FLEET=true`
   (development only) the fake server-scan answers (§6).
+- **Off by default since 2026-11-23** (ADR-0048's amendment of that day): the
+  team keeps server-scan apart from Wingman, so with server-scan configured
+  every route here still answers `501 FEATURE_DISABLED`, with
+  `details.setting: "DAY1_SERVER_SCAN_AREA"`, until
+  `DAY1_SERVER_SCAN_AREA=true` (chart: `day1.serverScanArea.enabled`). The
+  web reads it as "no area": the top bar links to server-scan's own UI, from
+  `GET /api/day1/platforms` (`{"id": "server-scan", "name": "Server Scan",
+  "url": <its UI>, "area": false}`, admins only), and a node's server opens
+  its page there (`server.url`). The Nodes tab, placement and Inventory
+  Management read server-scan through their own routes either way.
 - **server-scan failing** is `502 DEPENDENCY_UNAVAILABLE` on these routes only.
   The Nodes tab, MCE placement and Inventory Management keep their own
   behaviour (ADR-0038, ADR-0050, ADR-0057).

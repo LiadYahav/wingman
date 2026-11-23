@@ -68,6 +68,7 @@ from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
+from wingman_day1.compose_platforms import platforms
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_scale import scale_service, scale_workflow
 from wingman_day1.domain.names import HostedClusterNaming
@@ -114,8 +115,6 @@ HUB_TTL_SECONDS: Final = 10.0
 """The longest live status and the nodes view cache an MCE read (ADR-0041)."""
 PLACEMENT_TTL_SECONDS: Final = 5.0
 """The longest placement keeps an MCE's nodes and pods: read when a create asks (ADR-0050)."""
-FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
-"""Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,7 +374,6 @@ def build_context(
         events=MetricRolloutEvents(metrics),
         clock=clock,
     )
-    fake_ui = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
     quick_links = quick_links_service(settings, site_catalog)
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
@@ -413,7 +411,7 @@ def build_context(
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
-        segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
+        segments_manager_ui_url=segments_manager.segments_manager_ui(settings) or None,
         placement=placement,
         quick_links=quick_links,
         segments=segments_manager.segments_service(
@@ -432,6 +430,7 @@ def build_context(
             cache=cache,
         ),
         server_scan=server_scan.server_scan_service(inventory, settings),
+        platforms=platforms(settings, ledger=adapters.ledger, inventory=adapters.inventory),
     )
 
 

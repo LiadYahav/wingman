@@ -2,9 +2,13 @@
  * Wingman's areas (ADR-0047 and its amendment, ADR-0048; the single-pane
  * plan's workstream 2): the platforms the top bar switches between. Each has its
  * own brand (top left) and its own sidebar; only the areas that exist are
- * listed. Data only, so a new area is an entry here and its sidebar's
- * sections, not layout code.
+ * listed. Since 2026-11-23 the team keeps segments-manager and server-scan
+ * apart (both ADRs' amendments): while an area is off, its switch entry opens
+ * the system's own UI in a new tab. Data only, so a new area is an entry here
+ * and its sidebar's sections, not layout code.
  */
+
+import type { Platform } from "@/types";
 
 export type AreaId = "wingman" | "segments" | "server-scan";
 
@@ -82,9 +86,30 @@ export function areaOf(pathname: string): AreaId {
   return OTHERS.find((area) => pathname === area.href || pathname.startsWith(`${area.href}/`))?.id ?? "wingman";
 }
 
-/** The areas this person has, in the switch's order. */
-export function areasFor(access: AreaAccess): Area[] {
-  return [WINGMAN, ...OTHERS.filter((area) => access[area.id] === true)];
+/** One entry of the top bar's switch: an area here, or another system's own UI in a new tab. */
+export interface SwitchEntry {
+  id: AreaId;
+  label: string;
+  href: string;
+  /** `href` is the system's own UI, opened in a new tab; else an area here. */
+  external: boolean;
+}
+
+/**
+ * The switch's entries, in its order: Wingman's, then each other platform's
+ * area when this person has it (not yet while that is found out), else its
+ * own UI while day1 says its area is off (`platforms`, from `GET
+ * /api/day1/platforms`; admins only, so a viewer gets none). A system day1 is
+ * not configured for has neither.
+ */
+export function switchEntries(access: AreaAccess, platforms: readonly Platform[] = []): SwitchEntry[] {
+  const entries: SwitchEntry[] = [{ id: WINGMAN.id, label: WINGMAN.label, href: WINGMAN.href, external: false }];
+  for (const area of OTHERS) {
+    const platform = platforms.find((p) => p.id === area.id);
+    if (access[area.id] === true) entries.push({ id: area.id, label: area.label, href: area.href, external: false });
+    else if (platform && !platform.area && platform.url) entries.push({ id: area.id, label: area.label, href: platform.url, external: true });
+  }
+  return entries;
 }
 
 /**

@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import type { VisibilityState } from "@tanstack/react-table";
-import { Info, Lock, Network, TriangleAlert, Unplug } from "lucide-react";
+import { ExternalLink, Info, Lock, Network, TriangleAlert, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnPicker } from "@/components/data-table/column-picker";
 import { DataTable } from "@/components/data-table/data-table";
@@ -34,8 +34,19 @@ const COLUMNS_KEY = "wingman-segments-columns";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-/** Why the page cannot show segments at all: not an admin, or segments-manager not configured. */
+/** Why the page cannot show segments at all: not an admin, the area off, or segments-manager not configured. */
 function Blocked({ error }: { error: unknown }) {
+  if (isApiError(error, "FEATURE_DISABLED") && error.details.setting === "DAY1_SEGMENTS_AREA") {
+    return (
+      <EmptyState
+        icon={ExternalLink}
+        bordered
+        title="Segments is in its own UI"
+        description="The team keeps segments-manager apart from Wingman for now: open it from Segments in the top bar. Your operator can bring this area back (day1.segmentsArea.enabled, DAY1_SEGMENTS_AREA)."
+        data-testid="segments-area-off"
+      />
+    );
+  }
   if (isApiError(error, "FORBIDDEN")) {
     return (
       <EmptyState

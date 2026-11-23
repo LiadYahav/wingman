@@ -1,9 +1,9 @@
 """segments-manager's part of the composition root (ADR-0039, ADR-0047).
 
 ``main`` builds the app; this builds what segments-manager feeds: the ledger
-(real, none, or the fake fleet's), its cache for a cluster's network check and
-the Segments area's use case. Kept apart so ``main`` stays one screen of
-wiring per system.
+(real, none, or the fake fleet's), its cache for a cluster's network check,
+the Segments area's use case, and where its UI is for people. Kept apart so
+``main`` stays one screen of wiring per system.
 """
 
 from __future__ import annotations
@@ -22,6 +22,14 @@ from wingman_day1.settings import Day1Settings
 
 SEGMENTS_TTL_SECONDS: Final = 10.0
 """The longest the Segments area keeps an answer: the page re-reads every 30 seconds."""
+FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
+"""Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
+
+
+def segments_manager_ui(settings: Day1Settings) -> str:
+    """segments-manager's UI for people (the cluster page's and the top bar's links); "": none."""
+    fake = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
+    return settings.segments_manager_ui_base or fake
 
 
 def segment_ledger(

@@ -47,7 +47,11 @@ def client(
     inventory: ServerInventory | None,
     **settings: object,
 ) -> httpx.AsyncClient:
-    on = {"day1_server_scan_refresh": True, "server_scan_url": "http://server-scan.test"}
+    on = {
+        **support.SERVER_SCAN_AREA,
+        "day1_server_scan_refresh": True,
+        "server_scan_url": "http://server-scan.test",
+    }
     settings = {**on, **settings}
     app = support.build_app(
         gitlab=gitlab,
@@ -218,7 +222,11 @@ async def test_fetch_now_needs_the_admin_token_unless_server_scan_runs_with_auth
 async def test_without_server_scan_fetch_now_is_501(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
-    none = {"day1_server_scan_refresh": False, "server_scan_url": ""}
+    none = {
+        "day1_server_scan_area": False,
+        "day1_server_scan_refresh": False,
+        "server_scan_url": "",
+    }
     async with client(support, gitlab, clock, None, **none) as http:
         response = await http.post(refresh("srv_1"), headers=auth(support.ALICE))
     assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")

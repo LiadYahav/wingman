@@ -11,7 +11,7 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 
 ## What Wingman mirrors, and what it never does
 
-- **The area**, for admins (ADR-0048): Sites, Servers, a server's page
+- **The area**, for admins, off by default since 2026-11-23 (`DAY1_SERVER_SCAN_AREA`; ADR-0048's amendment: the team keeps server-scan apart, and the top bar links to its own UI): Sites, Servers, a server's page
   (Overview, Hardware, Network, Connectivity, History), Confs, Events, Jobs,
   Rules & Policies, Claude and Architecture, in server-scan's words, order and
   rules, typed in its shapes. Its sidebar lists only the pages Wingman built.

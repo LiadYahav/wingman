@@ -63,6 +63,17 @@ data:
   {{- fail "day1.serverScanRefresh.enabled needs serverScan.url: Fetch now asks server-scan to read the server" }}
   {{- end }}
   DAY1_SERVER_SCAN_REFRESH: {{ if and .Values.day1.serverScanRefresh .Values.day1.serverScanRefresh.enabled }}"true"{{ else }}"false"{{ end }}
+  # The Segments and Server Scan areas (ADR-0047, ADR-0048; 2026-11-23): off,
+  # the top bar links to each system's own UI. Each needs its system's url.
+  # Off for values kept from a release before them.
+  {{- if and .Values.day1.segmentsArea .Values.day1.segmentsArea.enabled (not (and .Values.segmentsManager .Values.segmentsManager.url)) }}
+  {{- fail "day1.segmentsArea.enabled needs segmentsManager.url: the area reads segments-manager" }}
+  {{- end }}
+  DAY1_SEGMENTS_AREA: {{ if and .Values.day1.segmentsArea .Values.day1.segmentsArea.enabled }}"true"{{ else }}"false"{{ end }}
+  {{- if and .Values.day1.serverScanArea .Values.day1.serverScanArea.enabled (not (and .Values.serverScan .Values.serverScan.url)) }}
+  {{- fail "day1.serverScanArea.enabled needs serverScan.url: the area reads server-scan" }}
+  {{- end }}
+  DAY1_SERVER_SCAN_AREA: {{ if and .Values.day1.serverScanArea .Values.day1.serverScanArea.enabled }}"true"{{ else }}"false"{{ end }}
   # Agent label keys every agent NodePool excludes (ADR-0065); empty for values
   # kept from a release before it.
   DAY1_EXCLUDED_AGENT_LABELS: {{ join "," (.Values.day1.excludedAgentLabels | default list) | quote }}

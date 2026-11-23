@@ -178,6 +178,16 @@ class Day1Settings(BaseSettings):
     # SERVER_SCAN_URL (or DAY1_FAKE_FLEET in development).
     day1_server_scan_refresh: bool = False
 
+    # ── The Segments and Server Scan areas (ADR-0047, ADR-0048; 2026-11-23) ──
+    # Off by default: the team keeps segments-manager and server-scan apart
+    # from Wingman, so an admin's top bar links to each one's own UI (its
+    # *_UI_URL, else its API's URL) and the areas' routes answer 501. On: the
+    # area inside Wingman, for admins, as before. Each needs its system's URL
+    # (or DAY1_FAKE_FLEET in development). The Nodes tab, placement, Inventory
+    # Management and a cluster's network read both systems either way.
+    day1_segments_area: bool = False
+    day1_server_scan_area: bool = False
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods
@@ -339,6 +349,22 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "DAY1_SERVER_SCAN_REFRESH=true needs SERVER_SCAN_URL: Fetch now asks "
                 "server-scan to read the server"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _areas_have_their_systems(self) -> Self:
+        """An area shows its system's pages; without the system it could show none."""
+        if self.day1_fake_fleet:
+            return self
+        if self.day1_segments_area and not self.segments_manager_url:
+            raise ValueError(
+                "DAY1_SEGMENTS_AREA=true needs SEGMENTS_MANAGER_URL: the area reads "
+                "segments-manager"
+            )
+        if self.day1_server_scan_area and not self.server_scan_url:
+            raise ValueError(
+                "DAY1_SERVER_SCAN_AREA=true needs SERVER_SCAN_URL: the area reads server-scan"
             )
         return self
 

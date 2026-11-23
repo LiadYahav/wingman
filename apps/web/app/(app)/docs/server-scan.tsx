@@ -37,13 +37,20 @@ const PAGES = [
   },
 ] as const;
 
-/** The docs page's "Server Scan" section, `#server-scan` (ADR-0048 and its amendments, up to 2026-11-18). */
+/** The docs page's "Server Scan" section, `#server-scan` (ADR-0048 and its amendments, up to 2026-11-23). */
 export function ServerScanSection() {
   return (
     <section>
       <SectionHeader id="server-scan" icon={ScanSearch} title="Server Scan" subtitle="server-scan's pages, inside Wingman" badge="Admins" />
-      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-        The top bar&apos;s <strong>Server Scan</strong> opens server-scan&apos;s pages inside Wingman, read through
+      <Callout type="info" title="Apart from Wingman, for now">
+        The team keeps server-scan apart from Wingman: the top bar&apos;s <strong>Server Scan</strong> opens
+        server-scan&apos;s own UI in a new tab, a node&apos;s server opens its page there, and the pages below are off.
+        Your operator can bring them back (<InlineCode>DAY1_SERVER_SCAN_AREA</InlineCode>, the chart&apos;s{" "}
+        <InlineCode>day1.serverScanArea.enabled</InlineCode>). The Nodes tab, MCE placement and Inventory Management
+        read server-scan either way.
+      </Callout>
+      <p className="text-sm text-muted-foreground leading-relaxed my-4">
+        With the area on, the top bar&apos;s <strong>Server Scan</strong> opens server-scan&apos;s pages inside Wingman, read through
         Wingman with no second sign-in. Its sidebar groups them: <strong>Fleet</strong> (Sites, Servers, Confs),{" "}
         <strong>Activity</strong> (Events, Jobs), <strong>Configuration</strong> (Rules &amp; Policies) and{" "}
         <strong>Reference</strong> (Claude, Architecture).
@@ -66,7 +73,9 @@ export function ServerScanSection() {
         </Callout>
         <Callout type="info" title="Who sees it, and what needs a token">
           Wingman&apos;s admins, for now, once server-scan is configured (<InlineCode>SERVER_SCAN_URL</InlineCode>, the
-          chart&apos;s <InlineCode>serverScan.url</InlineCode>); a viewer who opens a page is told it is for admins.
+          chart&apos;s <InlineCode>serverScan.url</InlineCode>) and the area is on; with it off the top bar links to
+          server-scan&apos;s own UI (<InlineCode>SERVER_SCAN_UI_URL</InlineCode>, else its API&apos;s address). A viewer
+          has no switch, and one who opens a page is told it is for admins.
           Where server-scan asks for tokens, Maintenance, Jobs and Fetch now need its admin token and History and Events its
           auditor token, from the Secret your operator names in <InlineCode>serverScan.tokenSecret.name</InlineCode>;
           without one, the page or the switch says which it needs. An older server-scan still works, without its newer

@@ -615,6 +615,8 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/network**", (route: Route) =>
     json(route, { vlan_id: null, segment: null, epg: null, ledger: null, problems: [], ledger_error: null })
   );
+  // day1 lists no system beside Wingman unless a test says so (platforms-apart.spec.ts): no link out
+  await page.route("**/api/day1/platforms", (route: Route) => json(route, { platforms: [] }));
   // The Segments area is off unless a test turns it on (e2e/fixtures/segments.ts): no area switch
   await page.route("**/api/day1/segments/**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Segments is not set up in this deployment: SEGMENTS_MANAGER_URL is empty.")
