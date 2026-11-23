@@ -4,8 +4,7 @@
 # is a folder. tests/repo/test_integrations_map.py keeps it true: every
 # wingman path exists, and a file is listed here exactly when it names this map.
 #
-# Wingman's Segments area was removed after 3.52.0 (ADR-0047's 2026-11-23
-# amendments). What is left reads one segment (by-segment, ADR-0039) and
+# Wingman's Segments area was removed in 3.52.1 (ADR-0066). What is left reads one segment (by-segment, ADR-0039) and
 # links to segments-manager's UI and its search.
 
 upstream: team-redbull/segments-manager

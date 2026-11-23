@@ -117,7 +117,7 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
 
 def test_day1_reads_server_scan_with_the_viewer_token_only() -> None:
     """One viewer token, from the Secret, for every read (ADR-0038). The admin and auditor
-    tokens went with the Server Scan area (removed after 3.52.0): their keys render nothing."""
+    tokens went with the Server Scan area (removed in 3.52.1): their keys render nothing."""
     with_keys = (
         "--set",
         "serverScan.tokenSecret.adminKey=admin-token",
@@ -285,7 +285,7 @@ def test_multi_infraenv_nodepools_are_off_unless_enabled() -> None:
 
 @pytest.mark.parametrize("key", ["serverScanRefresh", "segmentsArea", "serverScanArea"])
 def test_the_removed_areas_switches_are_accepted_and_render_nothing(key: str) -> None:
-    """The Segments and Server Scan areas were removed after 3.52.0 (ADR-0047, ADR-0048):
+    """The Segments and Server Scan areas were removed in 3.52.1 (ADR-0066):
     ``day1.<key>.enabled`` renders no variable, needs no system's url, and changes nothing."""
     for base in ((), tuple(ALL_ON)):
         on = render(*base, "--set", f"day1.{key}.enabled=true")

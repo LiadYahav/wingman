@@ -9,7 +9,7 @@ segments-manager. The decision is ADR-0039; how segments-manager itself
 works is [its study](../ecosystem/notes/segments-manager.md).
 
 Wingman's own Segments area, which rebuilt segments-manager's page, was
-removed after 3.52.0
+removed in 3.52.1
 ([ADR-0066](../adr/0066-segments-manager-and-server-scan-stay-apart.md), superseding
 [ADR-0047](../adr/0047-segments-area-native-read-only.md)): the team keeps segments-manager apart, and people use its own
 UI, linked from an admin's top bar (`GET /api/day1/platforms`).

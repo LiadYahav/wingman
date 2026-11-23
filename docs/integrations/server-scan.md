@@ -7,7 +7,7 @@ Wingman to a new server-scan release. How server-scan itself works is
 [its study](../ecosystem/notes/server-scan.md).
 
 Wingman's own Server Scan area, which rebuilt server-scan's UI page by page,
-was removed after 3.52.0
+was removed in 3.52.1
 ([ADR-0066](../adr/0066-segments-manager-and-server-scan-stay-apart.md), superseding
 [ADR-0048](../adr/0048-the-server-scan-area-page-by-page.md)): the team keeps server-scan apart, and people use its own UI,
 linked from an admin's top bar (`GET /api/day1/platforms`).

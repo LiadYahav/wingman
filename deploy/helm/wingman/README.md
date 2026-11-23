@@ -229,7 +229,7 @@ Keys an older release documented and then dropped are accepted and ignored, mark
 in the schema: `quickLinks.status`, `quickLinks.sslVerify`, `quickLinks.argocdTokensSecret` and a
 link's `ping` and `argocd` (3.13.1), `day1.serverScanRefresh`, `day1.segmentsArea`,
 `day1.serverScanArea` and `serverScan.tokenSecret.adminKey` and `auditorKey` (the Segments
-and Server Scan areas, removed after 3.52.0), and the legacy chart's `cache`, `paths`,
+and Server Scan areas, removed in 3.52.1), and the legacy chart's `cache`, `paths`,
 `gitlab.defaultBranch`, `gitlab.sslVerify` and `clusterStatus.clusterNamePrefix`. Delete them
 when convenient.
 
@@ -405,7 +405,7 @@ replacing the Secret.
 The same `serverScan.url` puts **Server Scan** in the top bar's platform switch for
 Wingman's admins: a link to server-scan's own UI (`uiUrl`, else `url`), in a new tab. The
 team keeps server-scan apart from Wingman (ADR-0048's 2026-11-23 amendment): its in-app
-Server Scan area was removed after 3.52.0, with `day1.serverScanRefresh` and
+Server Scan area was removed in 3.52.1, with `day1.serverScanRefresh` and
 `day1.serverScanArea` and the Secret's `adminKey` and `auditorKey`, which a values file may
 still set: they are accepted and ignored ([upgrade guide](../../../docs/upgrade/3.52.0-to-3.52.1.md)).
 Set `uiUrl` to server-scan's browser address when `url` is its in-cluster API Service, or the
@@ -424,7 +424,7 @@ hides the EPG.
 The same setting puts **Segments** in the top bar's platform switch for Wingman's admins: a
 link to segments-manager's own UI (`uiUrl`, else `url`), in a new tab. The team keeps
 segments-manager apart from Wingman (ADR-0047's 2026-11-23 amendment): its in-app Segments
-area was removed after 3.52.0, with `day1.segmentsArea`, which a values file may still set:
+area was removed in 3.52.1, with `day1.segmentsArea`, which a values file may still set:
 it is accepted and ignored. Viewers have no link.
 
 The card also links to segments-manager's UI, names the cluster to search for there (its UI

@@ -141,7 +141,7 @@ day1:
   multiInfraEnvNodepools:
     enabled: false
   # serverScanRefresh, segmentsArea and serverScanArea went with the Segments
-  # and Server Scan areas, removed after 3.52.0 (ADR-0047, ADR-0048): the team
+  # and Server Scan areas, removed in 3.52.1 (ADR-0066): the team
   # keeps both systems apart, and an admin's top bar links to each one's own UI
   # (segmentsManager.uiUrl and serverScan.uiUrl, else their url). A values file
   # that still sets them is accepted and ignored (docs/upgrade/3.52.0-to-3.52.1.md).
@@ -320,7 +320,7 @@ serverScan:
   # Empty name: no token, for a server-scan with auth off. Never put the token
   # itself in values. day1 reads it at start: restart day1 after rotating it.
   # adminKey and auditorKey (server-scan's admin and auditor tokens) went with
-  # the Server Scan area, removed after 3.52.0: accepted and ignored, and the
+  # the Server Scan area, removed in 3.52.1: accepted and ignored, and the
   # Secret's keys are no longer read.
   tokenSecret:
     name: ""

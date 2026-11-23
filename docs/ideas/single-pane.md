@@ -8,8 +8,7 @@ says which.
 
 **2026-11-23: the team keeps server-scan and segments-manager apart.**
 Workstreams 3 and 4, the Segments and Server Scan areas, were built from
-3.15.0 on and removed after 3.52.0 (ADR-0047's and ADR-0048's 2026-11-23
-amendments), and decisions 10, 13, 14 and 22 with them. An admin's top bar
+3.15.0 on and removed in 3.52.1 (ADR-0066), and decisions 10, 13, 14 and 22 with them. An admin's top bar
 links to each system's own UI in a new tab. Wingman still reads both for its
 own pages: a cluster's EPG (ADR-0039), the Nodes tab, placement and
 Inventory Management. Their sections below are kept as the record.
@@ -57,7 +56,7 @@ Wingman becomes the platform team's one place to work from:
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
 | 21 | **Small blast radius: a change reaches each cluster through its own MR, and the customer takes it when ready.** One concept, not two features | A new flavor version opens one MR per linked cluster, **automatically**, and each customer merges theirs when comfortable. A cluster is measured against its own flavor version, so a newer version is "update available", never "out of sync". Import uses the same engine |
 | 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status (the status: dropped 2026-11-13, ADR-0052's amendment) |
-| 22 | **Option C (2026-11-13): segments-manager and server-scan are fully integrated into Wingman**: every feature of their UIs and their look, not only native tables | Each is a platform in the top bar (Wingman · Segments Manager · Server Scan) with its own sidebar and brand; their APIs stay as they are (decision 10). Inventory Management is not one of them: it is a Wingman sidebar page for the orchestrator's server workflows (ADR-0057). Planned only: the user's go comes first ("just put it in the plan"). *Superseded 2026-11-23: built, then removed after 3.52.0; the top bar's Segments Manager and Server Scan are links to their own UIs* |
+| 22 | **Option C (2026-11-13): segments-manager and server-scan are fully integrated into Wingman**: every feature of their UIs and their look, not only native tables | Each is a platform in the top bar (Wingman · Segments Manager · Server Scan) with its own sidebar and brand; their APIs stay as they are (decision 10). Inventory Management is not one of them: it is a Wingman sidebar page for the orchestrator's server workflows (ADR-0057). Planned only: the user's go comes first ("just put it in the plan"). *Superseded 2026-11-23: built, then removed in 3.52.1 (ADR-0066); the top bar's Segments Manager and Server Scan are links to their own UIs* |
 
 ## What this changes in Wingman's rules
 
@@ -75,14 +74,14 @@ division of the work. Two of them change, and its first question is answered:
   server for a cluster (rule 5 stands).
 - **"segments-manager: never called by Wingman"** was already out of date
   (ADR-0039 reads one segment). Wingman showed segments-manager's read UI
-  from 3.15.0 until the area was removed after 3.52.0; it reads one segment
+  from 3.15.0 until the area was removed in 3.52.1; it reads one segment
   again. Allocation and release stay inside the workflows (rule 6 stands).
 - **server-scan: "read-only"** stays true for the first version of the
   Servers area. server-scan's own UI has two writes, maintenance on/off and
   "run a collector job now"; whether Wingman offers them is an open question
   (below). Decided by decision 14: both, behind the admin check; maintenance
   on/off came with the Servers page (3.23.0, ADR-0048's amendment). Since the
-  area's removal after 3.52.0, Wingman is read-only on server-scan again.
+  area's removal in 3.52.1, Wingman is read-only on server-scan again.
 - Convention 14 (site and MCE are read-only in Wingman) is unchanged.
 
 ## Workstreams
@@ -100,8 +99,8 @@ until their workstreams are built.
 | 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0047 (0046 unused) | M | 1 for a place to show it. Since 2026-11-23 the top bar links out; there are no other areas |
-| 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0. **Removed after 3.52.0** (2026-11-23) |
-| 4 | Server Scan area | 0048 | L–XL | Sites, Servers (with maintenance on/off and the admin token), a server's page (History, the auditor token), Claude, Architecture, Confs, Rules & Policies, Events and Jobs built (ADR-0048 and its amendments, 3.22.0 to 3.32.0); Jobs has run now, with the admin token on its reads too. **Removed after 3.52.0** (2026-11-23) |
+| 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0. **Removed in 3.52.1** (2026-11-23) |
+| 4 | Server Scan area | 0048 | L–XL | Sites, Servers (with maintenance on/off and the admin token), a server's page (History, the auditor token), Claude, Architecture, Confs, Rules & Policies, Events and Jobs built (ADR-0048 and its amendments, 3.22.0 to 3.32.0); Jobs has run now, with the admin token on its reads too. **Removed in 3.52.1** (2026-11-23) |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 (reserved, not written) | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
@@ -242,8 +241,7 @@ The groundwork every area needs, built once:
 
 ### 3. Segments area (ADR-0047)
 
-**Status (2026-11-23): removed after 3.52.0** (ADR-0047's 2026-11-23
-amendments): the team keeps segments-manager apart, and the top bar links to
+**Status (2026-11-23): removed in 3.52.1** (ADR-0066): the team keeps segments-manager apart, and the top bar links to
 its own UI. What follows is the record of what was built.
 
 **Status (2026-11-13): built as an alpha** (3.15.0), for the user to look
@@ -297,8 +295,7 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 
 ### 4. Server Scan area (ADR-0048)
 
-**Status (2026-11-23): removed after 3.52.0** (ADR-0048's 2026-11-23
-amendments), with its writes and the admin and auditor tokens: the team
+**Status (2026-11-23): removed in 3.52.1** (ADR-0066), with its writes and the admin and auditor tokens: the team
 keeps server-scan apart, and the top bar links to its own UI. A node's
 server link opens server-scan's own server page. What follows is the record
 of what was built.
@@ -554,7 +551,7 @@ For every release:
 The operator steps this plan brings:
 - **GitLab**: the per-team membership.
 - **server-scan**: its viewer token (the auditor and admin tokens went with
-  the area after 3.52.0).
+  the area in 3.52.1).
 - **cluster-navigator**: its service token.
 - **MCE tokens**: the wider rights, and the per-MCE addresses.
 

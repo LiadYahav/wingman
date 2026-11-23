@@ -46,7 +46,7 @@ Operations of the other dependencies (day1):
 | `segments_manager` | `get_segment` |
 
 The Segments and Server Scan areas' values are retired with their areas
-(removed after 3.52.0, ADR-0047 and ADR-0048's 2026-11-23 amendments):
+(removed in 3.52.1, ADR-0066):
 `server_scan` `list_sites`, `enable_maintenance`, `disable_maintenance`,
 `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`,
 `list_event_actors`, `get_skill`, `download_skill`,
