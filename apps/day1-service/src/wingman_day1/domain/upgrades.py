@@ -16,7 +16,7 @@ edit changing them.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Final
 
@@ -216,6 +216,15 @@ class UpgradeRun:
     def cluster(self) -> str:
         """The cluster file's stem the run upgrades."""
         return self.workflow_id.removeprefix(UPGRADE_WORKFLOW_PREFIX)
+
+    def without_proposals(self) -> UpgradeRun:
+        """The run as a viewer reads it: without the upgrade agent's proposals.
+
+        Each acts on an object that may be one of the cluster's nodes, and only
+        an admin decides them; a cluster's nodes are for admins (ADR-0038,
+        amended 2026-11-23). The agent's verdict, the plan and the log stay.
+        """
+        return replace(self, pending_actions=())
 
 
 # ── Who owns the version keys while upgrades are on (ADR-0055) ───────────────

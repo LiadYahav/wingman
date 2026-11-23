@@ -120,7 +120,9 @@ orchestrator and segments-manager with fakes seeded from `dev/fleet-fixtures/`
 5. The web keeps it in a cookie and sends it as `Authorization: Bearer` on
    every call. Routes take `CurrentUser` (reads) or `AdminUser` (writes) from
    `wingman_core.web.auth`; a few areas are for admins even to read (Segments,
-   Server Scan, Quick Links). Nobody approves their own change (`403 SELF_APPROVAL`).
+   Server Scan, Quick Links), and so is a cluster's nodes, the servers it runs
+   on: a viewer's scale and upgrade runs leave them out too (ADR-0038). Nobody
+   approves their own change (`403 SELF_APPROVAL`).
 
 Locally, `DEV_AUTH_ENABLED` with a `DEV_AUTH_SECRET` of 32 or more characters
 replaces OpenShift (`POST /api/auth/dev-login`); settings refuse a weak secret.

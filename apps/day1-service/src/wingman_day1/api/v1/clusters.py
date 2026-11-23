@@ -1,7 +1,8 @@
 """``/api/day1/clusters``: hosted clusters, their status, history and drift.
 
-Reads need a session (``CurrentUser``); every change needs an admin
-(``AdminUser``) and is a merge request. Static paths come before
+Reads need a session (``CurrentUser``), but a cluster's nodes, the servers
+it runs on, need an admin (ADR-0038, amended 2026-11-23); every change needs
+an admin (``AdminUser``) and is a merge request. Static paths come before
 ``/{name}`` so a cluster can never shadow them.
 """
 
@@ -366,12 +367,15 @@ async def cluster_network(
 async def cluster_nodes(
     name: str,
     context: Context,
-    user: CurrentUser,
+    user: AdminUser,
     nodes: Nodes,
     site: Site = None,
     mce: Mce = None,
 ) -> ClusterNodesOut:
-    """The servers server-scan places in the cluster, with their newest uninstall run (ADR-0038)."""
+    """The servers server-scan places in the cluster, with their newest uninstall run (ADR-0038).
+
+    Admins only: a viewer never sees a cluster's nodes (403, ADR-0038's 2026-11-23 amendment).
+    """
     ref = await _ref(context, name, site, mce)
     return ClusterNodesOut.of(await nodes.nodes(ref))
 

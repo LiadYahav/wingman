@@ -3,7 +3,8 @@
 ADR-0062, docs/notes/2026-11-16-scale-nodepools-api.md. Behind
 ``DAY1_SCALE_NODEPOOLS``: off, every route answers 501. ``{name}`` is the
 cluster file's stem, which is the workflow's ``cluster``. Reading what can
-be scaled, and the run, needs a session; a start needs an admin.
+be scaled, and the run, needs a session; a start needs an admin. A viewer's
+run names no server, Machine or node (ADR-0038, amended 2026-11-23).
 """
 
 from __future__ import annotations
@@ -54,5 +55,9 @@ async def start_scale(
 async def scale_run(
     name: str, context: Context, scale: Scale, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ScaleRunOut:
-    """The cluster's update-nodepool run, read by its id (404 when it never had one)."""
-    return ScaleRunOut.of(await scale.run(await _ref(context, name, site, mce)))
+    """The cluster's update-nodepool run, read by its id (404 when it never had one).
+
+    For a viewer, ``result.chosen`` and ``result.deleting`` are empty: they name servers.
+    """
+    run = await scale.run(await _ref(context, name, site, mce))
+    return ScaleRunOut.of(run if user.is_admin else run.without_servers())

@@ -1,7 +1,7 @@
 # ADR-0038: Cluster nodes come from the MCE by NodePool, joined to server-scan; uninstall starts the platform's workflow
 
 Date: 2026-11-11
-Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache)
+Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache); amended 2026-11-23 (a cluster's nodes are for admins only)
 
 ## Context
 
@@ -174,3 +174,50 @@ hub: the deleting Machine's drain step, and the new Machine's install stage.
   2026-11-11), and the saved OpenAPI document.
 - `tests/repo/test_chart_env_contract.py`: the chart's variables, values kept
   from a 3.3 release included.
+
+## Amendment (2026-11-23): a cluster's nodes are for admins only
+
+The user (2026-11-23) asked that a viewer never see a cluster's nodes, the
+servers it runs on. Wingman reads server-scan for its admins; customers sign
+in as viewers and see their cluster, its NodePools and their counts, never
+the servers behind them. The role still comes from the OpenShift groups in
+the session token; nothing else about the nodes view changes.
+
+- **The nodes read is an admin's.** `GET /api/day1/clusters/{name}/nodes`
+  takes `AdminUser`, as the uninstall already did. A viewer gets the standard
+  `403 FORBIDDEN` problem (`details.role: viewer`), before the MCE is asked,
+  so the answer says nothing about the deployment either (live status off is
+  a 501 for an admin only).
+- **A read that also names servers gives a viewer the same answer without
+  them.** The route applies one method of the domain type when
+  `user.is_admin` is false:
+  - `GET …/scale-run` (ADR-0062), `ScaleRun.without_servers`:
+    `result.chosen` and `result.deleting` are empty, the servers, Machines
+    and nodes a scale-down took. The NodePools before and after, the totals,
+    the live replicas and the workflow's words stay.
+  - `GET …/upgrade-run` (ADR-0055), `UpgradeRun.without_proposals`:
+    `pending_actions` is empty. A proposal names the object it acts on, which
+    may be one of the cluster's nodes, and only admins decide them. The plan,
+    the progress (per NodePool, never per node), the agent's verdict, what
+    the run waits for and its log stay.
+- **Kept as they are, because they name no node:**
+  - live status (`/status`, `/status/stream`, `/bulk-status`): NodePools,
+    replicas, ready counts and the NodePool's own conditions;
+  - `GET …/scale`: the file's NodePools and their locks;
+  - `GET /api/day1/upgrades`: one row per cluster;
+  - the delete-cluster and provision-cluster runs: the cluster's;
+  - placement: free pods and free servers per MCE, counted;
+  - Inventory Management (ADR-0057): each MCE's pools, the free servers a
+    named install may pick, and the add-server runs are the fleet's servers
+    in no cluster, not a cluster's nodes;
+  - `GET …/excluded-agent-labels`: the file's NodePools;
+  - day2: no read names a server or a node. The Server Scan area was for
+    admins already.
+- **The workflows' words pass through** (the decision above): an error,
+  `waiting_for`, a log line or the agent's diagnosis may name a node.
+  Wingman does not parse free text, and a customer needs those words to
+  follow an upgrade that waits on them.
+
+Verification: `tests/api/test_nodes_api.py` (a viewer's 403, also with live
+status off), `test_scale_api.py` and `test_upgrades_api.py` (a viewer's run
+is the admin's without those fields).

@@ -166,7 +166,9 @@ the workflow's own rule, so they match.
   NOT_FOUND` (no run).
 
 **`GET .../scale-run`** (any signed-in user): the cluster's newest run, `404
-NOT_FOUND` when it never had one.
+NOT_FOUND` when it never had one. Since 2026-11-23 a viewer's names no server:
+its `result.chosen` and `result.deleting` are empty, and everything else is
+the admin's answer (ADR-0038's amendment).
 
 ```json
 { "workflow_id": "update-nodepool-ocp4-prod-lark-site1", "status": "running",

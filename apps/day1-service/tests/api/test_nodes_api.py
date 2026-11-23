@@ -188,7 +188,7 @@ async def test_without_server_scan_or_the_orchestrator_nodes_list_and_the_start_
     workflow = None if with_inventory else FakeUninstallWorkflow(inventory, clock=FixedClock())
     app = app_of(support, gitlab, clock, mce, inventory if with_inventory else None, workflow)
     async for client in serve(app):
-        listed = await client.get(NODES, headers=auth(support.VIEWER))
+        listed = await client.get(NODES, headers=auth(support.ALICE))
         assert listed.status_code == 200
         assert listed.json()["uninstall"]["available"] is False
         assert named in listed.json()["uninstall"]["detail"]
@@ -204,7 +204,7 @@ async def test_the_nodes_answer_has_exactly_the_contracts_shape(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     response = await fleet.get(
-        NODES, params={"site": "site1", "mce": SITE1_A}, headers=auth(support.VIEWER)
+        NODES, params={"site": "site1", "mce": SITE1_A}, headers=auth(support.ALICE)
     )
     assert response.status_code == 200
     body = response.json()
@@ -266,9 +266,7 @@ async def test_a_nodes_run_is_shown_once_one_started(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     await uninstall(fleet, auth, support.ALICE)
-    node = (await fleet.get(NODES, headers=auth(support.VIEWER))).json()["node_pools"][0]["nodes"][
-        0
-    ]
+    node = (await fleet.get(NODES, headers=auth(support.ALICE))).json()["node_pools"][0]["nodes"][0]
     assert node["uninstall"] == {
         "workflow_id": WORKFLOW_ID,
         "status": "running",
@@ -286,7 +284,7 @@ async def test_server_scan_or_the_orchestrator_unreadable_still_lists_the_nodes(
 ) -> None:
     inventory.unavailable = True
     workflow.unavailable = True
-    response = await fleet.get(NODES, headers=auth(support.VIEWER))
+    response = await fleet.get(NODES, headers=auth(support.ALICE))
     assert response.status_code == 200
     body = response.json()
     assert body["server_scan_error"].startswith("ServerScanUnavailable:")
@@ -312,7 +310,7 @@ async def test_an_mce_that_cannot_tell_answers_its_problem(
     code: str,
 ) -> None:
     async for client in serve(app_of(support, gitlab, clock, hub)):
-        response = await client.get(NODES, headers=auth(support.VIEWER))
+        response = await client.get(NODES, headers=auth(support.ALICE))
         assert (response.status_code, response.json()["code"]) == (status, code)
 
 
@@ -320,13 +318,35 @@ async def test_an_unknown_cluster_is_not_found_on_both_routes(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     path = "/api/day1/clusters/ocp4-prod-nope-site1/nodes"
-    assert (await fleet.get(path, headers=auth(support.VIEWER))).status_code == 404
+    assert (await fleet.get(path, headers=auth(support.ALICE))).status_code == 404
     started = await uninstall(fleet, auth, support.ALICE, path=f"{path}/{SRV0102}/uninstall")
     assert (started.status_code, started.json()["code"]) == (404, "NOT_FOUND")
 
 
 async def test_reading_nodes_needs_a_session(fleet: httpx.AsyncClient) -> None:
     assert (await fleet.get(NODES)).status_code == 401
+
+
+async def test_a_viewer_never_reads_a_clusters_nodes(
+    fleet: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    """ADR-0038's 2026-11-23 amendment: the servers a cluster runs on are for admins."""
+    response = await fleet.get(
+        NODES, params={"site": "site1", "mce": SITE1_A}, headers=auth(support.VIEWER)
+    )
+    problem = response.json()
+    assert (response.status_code, problem["code"]) == (403, "FORBIDDEN")
+    assert problem["details"] == {"role": "viewer"}
+    assert DL0102 not in response.text
+
+
+async def test_a_viewer_is_refused_before_the_mce_is_asked(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    """Live status off is a 501 for an admin; a viewer hears only that the nodes are not theirs."""
+    async for client in serve(app_of(support, gitlab, clock, None)):
+        response = await client.get(NODES, headers=auth(support.VIEWER))
+        assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN")
 
 
 # ── Uninstall ────────────────────────────────────────────────────────────────

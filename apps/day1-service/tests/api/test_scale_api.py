@@ -1,8 +1,8 @@
 """A cluster's NodePools scaled through the update-nodepool workflow, over HTTP (ADR-0062).
 
 Off by default: every route answers 501. With ``DAY1_SCALE_NODEPOOLS`` on,
-anyone signed in reads what can be scaled and the run; admins start one for
-one NodePool of the cluster file; day1 fills the MCE and the cluster,
+anyone signed in reads what can be scaled and the run (a viewer's names no
+server); admins start one for one NodePool of the cluster file; day1 fills the MCE and the cluster,
 refuses a NodePool it cannot map to one entry of the file (and the retired
 InfraEnv kind) before anything is sent; a NodePool whose replicas a flavor
 locks moves only back to its locked value; everything else is the
@@ -326,6 +326,30 @@ async def test_a_scale_down_may_name_exactly_the_servers_that_leave(
         (named[0].lower(), "named"),
         (named[1].lower(), "named"),
     ]
+
+
+async def test_a_viewer_reads_the_same_run_without_its_servers(
+    on: httpx.AsyncClient, auth: Auth, support: Any, run_clock: ManualClock
+) -> None:
+    """ADR-0038's 2026-11-23 amendment: the counts stay; no server, Machine or node is named."""
+    named = ["ocp-dell-r660-site1-128c-1024gb-5tb-DL0001"]
+    body = {"replicas": 2, "nodepool": SMALL, "server_names": named}
+    assert (await on.post(f"{BASE}/scale", json=body, headers=auth(support.ALICE))).is_success
+    run_clock.advance(seconds=120)
+    admin = (await on.get(f"{BASE}/scale-run", headers=auth(support.ALICE))).json()
+    seen = await on.get(f"{BASE}/scale-run", headers=auth(support.VIEWER))
+    viewer = seen.json()
+    assert seen.status_code == 200
+    assert admin["result"]["chosen"] and admin["result"]["deleting"]
+    assert (viewer["result"]["chosen"], viewer["result"]["deleting"]) == ([], [])
+    kept = {k: v for k, v in admin["result"].items() if k not in {"chosen", "deleting"}}
+    assert {k: v for k, v in viewer["result"].items() if k in kept} == kept
+    assert {k: v for k, v in viewer.items() if k != "result"} == {
+        k: v for k, v in admin.items() if k != "result"
+    }
+    assert (viewer["result"]["total_before"], viewer["result"]["total_after"]) == (3, 2)
+    for name in (named[0].lower(), *admin["result"]["deleting"]):
+        assert name not in seen.text
 
 
 @pytest.mark.parametrize(

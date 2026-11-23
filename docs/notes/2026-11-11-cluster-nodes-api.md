@@ -11,9 +11,10 @@ the workflow's, and Wingman neither repeats nor second-guesses it. Decision and 
 
 ## 1. The nodes of a cluster, by NodePool
 
-`GET /api/day1/clusters/{name}/nodes?site=&mce=`, any signed-in user. The
-cluster page's Nodes tab reads it; nothing else does (the cluster list shows
-no nodes).
+`GET /api/day1/clusters/{name}/nodes?site=&mce=`, admins only since
+2026-11-23 (a viewer gets `403 FORBIDDEN`; ADR-0038's amendment). The
+cluster page's Nodes tab and its Overview's NodePools card read it, for an
+admin; nothing else does (the cluster list shows no nodes).
 
 The NodePools and their Machines come from the cluster's MCE, read-only,
 through the same hub access as live status (`CLUSTER_STATUS_ENABLED`). Each
