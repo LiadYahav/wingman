@@ -481,19 +481,13 @@ def _machine_conditions(scenario: str) -> list[JSON]:
             _condition("InfrastructureReady", False, "InstallationInProgress", "3 of 5 completed"),
             _condition("NodeHealthy", False, "WaitingForNodeRef"),
         ]
+    rebooting = scenario == "rebooting"
+    failed = "NodeConditionsFailed" if rebooting else ""
+    unknown = "Node condition Ready is Unknown. " if rebooting else ""
     conditions = [
-        _condition(
-            "Ready",
-            scenario != "rebooting",
-            "NodeConditionsFailed" if scenario == "rebooting" else "",
-        ),
+        _condition("Ready", not rebooting, failed),
         _condition("InfrastructureReady", True),
-        _condition(
-            "NodeHealthy",
-            scenario != "rebooting",
-            "NodeConditionsFailed" if scenario == "rebooting" else "",
-            "Node condition Ready is Unknown. " if scenario == "rebooting" else "",
-        ),
+        _condition("NodeHealthy", not rebooting, failed, unknown),
     ]
     if scenario == "deleting":
         conditions += [
