@@ -1,6 +1,6 @@
 /**
  * The team keeps segments-manager and server-scan apart from Wingman (mocked;
- * ADR-0047 and ADR-0048's 2026-11-23 amendments). An admin's top bar has a
+ * ADR-0066). An admin's top bar has a
  * platform switch: Wingman, then Segments and Server Scan, each opening its
  * system's own UI in a new tab. Nothing in Wingman leads to a page of its own
  * for either. A viewer has no switch and never asks for the list.

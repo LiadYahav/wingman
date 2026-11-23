@@ -5,7 +5,7 @@ import type { ServerRecord } from "@/types";
 /**
  * A node's server, linked to its page in server-scan's own UI (`url`, built
  * by day1), in a new tab: the team keeps server-scan apart from Wingman
- * (ADR-0048's 2026-11-23 amendment).
+ * (ADR-0066).
  */
 export function NodeServerAnchor({
   server,

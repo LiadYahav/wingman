@@ -1,7 +1,6 @@
 /**
  * The top bar's platforms: Wingman, then the systems the team keeps apart
- * from it, segments-manager and server-scan (ADR-0047 and ADR-0048's
- * 2026-11-23 amendments), each a link to its own UI in a new tab. Wingman's
+ * from it, segments-manager and server-scan (ADR-0066), each a link to its own UI in a new tab. Wingman's
  * brand also says who built it.
  */
 

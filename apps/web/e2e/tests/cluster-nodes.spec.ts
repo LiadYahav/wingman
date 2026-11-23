@@ -555,7 +555,7 @@ test.describe("The Overview's nodepools open to their nodes", () => {
   });
 });
 
-test.describe("A node's server opens server-scan's own page (ADR-0048's 2026-11-23 amendment)", () => {
+test.describe("A node's server opens server-scan's own page (ADR-0066)", () => {
   test("every server on the Nodes tab and the Overview links to server-scan, in a new tab", async ({ page }) => {
     const board = mockNodesBoard();
     await openNodesTab(page, board);

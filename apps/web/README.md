@@ -27,7 +27,7 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Nodepool ratio**: a flavor may size its nodepools by a ratio (`1:2:1`); the create form asks for one size and fills in each sized nodepool's replicas
 - **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
-- **Segments Manager and Server Scan** (admins): the top bar links to each system's own UI, in a new tab (`components/layout/platform-switch.tsx`, from `GET /api/day1/platforms`); the team keeps both apart from Wingman, whose own areas for them were removed after 3.52 (ADR-0047, ADR-0048)
+- **Segments Manager and Server Scan** (admins): the top bar links to each system's own UI, in a new tab (`components/layout/platform-switch.tsx`, from `GET /api/day1/platforms`); the team keeps both apart from Wingman, whose own areas for them were removed in 3.52.1 (ADR-0066)
 - **Inventory Management** (`/inventory`, everyone signed in; ADR-0057): each MCE's free Agents by InfraEnv pool as Ready, Needs fix and Total, and the add-server runs, herzi's included; with `DAY1_ADD_SERVERS`, admins install servers into a pool by count or by name
 - **Quick Links** (`/quick-links`, admins; ADR-0052): the hub's and every MCE's Argo CD and console, by site, then the team's own links from the chart's ConfigMap; Wingman lists the links and never calls them
 - **In-App Documentation**: Full platform guide at `/docs`

@@ -1,9 +1,9 @@
 """The systems beside Wingman in an admin's top bar: segments-manager and server-scan.
 
-The team keeps both apart from Wingman (the 2026-11-23 amendments of ADR-0047
-and ADR-0048): the top bar links to each one's own UI, in a new tab. A system
-Wingman is not configured for, or whose UI it knows no address for, is not
-listed. Wingman only links to them here: it never calls a UI.
+The team keeps both apart from Wingman (ADR-0066): the top bar links to each
+one's own UI, in a new tab. A system Wingman is not configured for, or whose
+UI it knows no address for, is not listed. Wingman only links to them here:
+it never calls a UI.
 """
 
 from __future__ import annotations

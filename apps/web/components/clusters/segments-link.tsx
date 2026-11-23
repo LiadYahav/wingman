@@ -43,8 +43,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 
 /**
  * The HostedCluster card's link to the cluster's segments, in segments-manager's
- * own UI (the team keeps it apart from Wingman, ADR-0047's 2026-11-23
- * amendment); nothing when segments-manager is not configured. Its UI opens
+ * own UI (the team keeps it apart from Wingman, ADR-0066); nothing when segments-manager is not configured. Its UI opens
  * no single cluster, so this opens the UI and names what to search for there:
  * the file stem, its `cluster_name`. Day1 builds both URLs
  * (`segments_manager`); the page only shows them.

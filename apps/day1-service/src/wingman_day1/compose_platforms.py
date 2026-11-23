@@ -1,4 +1,4 @@
-"""The top bar's systems, part of the composition root (ADR-0047, ADR-0048; 2026-11-23).
+"""The top bar's systems, part of the composition root (ADR-0066).
 
 segments-manager and server-scan are listed when day1 has them (their
 adapters: real, or the fake fleet's), each with its own UI's address. Kept

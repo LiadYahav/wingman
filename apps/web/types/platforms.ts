@@ -1,6 +1,6 @@
 /**
  * The systems beside Wingman in an admin's top bar: segments-manager and
- * server-scan (ADR-0047 and ADR-0048's 2026-11-23 amendments). Admins only.
+ * server-scan (ADR-0066). Admins only.
  */
 
 // ── GET /api/day1/platforms ───────────────────────────────────────────────────

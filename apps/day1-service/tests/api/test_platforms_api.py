@@ -1,4 +1,4 @@
-"""``GET /api/day1/platforms``, the top bar's links (ADR-0047, ADR-0048; 2026-11-23).
+"""``GET /api/day1/platforms``, the top bar's links (ADR-0066).
 
 The team keeps segments-manager and server-scan apart from Wingman: an
 admin's top bar links to each one's own UI, and Wingman serves no page of its

@@ -1,4 +1,4 @@
-"""The top bar's systems, as the web reads them (ADR-0047, ADR-0048; 2026-11-23)."""
+"""The top bar's systems, as the web reads them (ADR-0066)."""
 
 from __future__ import annotations
 

@@ -9,8 +9,8 @@ import type { Platform } from "@/types";
 const PLATFORMS_STALE_MS = 5 * 60_000;
 
 /**
- * The systems beside Wingman, each with its own UI and whether its area is on
- * (ADR-0047 and ADR-0048's 2026-11-23 amendments). Asked by admins only, as
+ * The systems beside Wingman, each with its own UI's address (ADR-0066).
+ * Asked by admins only, as
  * day1 answers it; a viewer, an answer still on its way and a failed read are
  * all `[]`: no link out.
  */

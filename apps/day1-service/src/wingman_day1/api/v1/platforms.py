@@ -1,8 +1,8 @@
 """The top bar's systems: segments-manager's and server-scan's own UIs (2026-11-23).
 
 Admins only, as Quick Links (decision 13 of ``docs/ideas/single-pane.md``,
-until RBAC). Built from the settings at start: nothing is called. The
-amendments of ADR-0047 and ADR-0048 say why the top bar links out.
+until RBAC). Built from the settings at start: nothing is called. ADR-0066
+says why the top bar links out.
 """
 
 from __future__ import annotations
