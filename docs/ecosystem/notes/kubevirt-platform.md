@@ -202,9 +202,11 @@ which needs an amendment (§6 item 6). Owners still open: the chart (item 3), th
 (item 4), herzi's collection loop (item 5, proposed in herzi PR #1).
 
 For Wingman: `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065) is rule 2 written per cluster file. **The key
-is not settled:** the convention and herzi PR #1 (draft) say `redbull.io/claimed`; a plan on herzi's
-branch `docs/retire-used-servers-plan` (`578edf1`, 2026-11-19, no PR, its decisions marked approved)
-says `redbull.io/ever-installed`, and lets a NodePool carry that one `DoesNotExist` and nothing else.
+is `redbull.io/ever-installed`**, the user's decision (2026-11-23, ADR-0065's amendment), on purpose
+unlike the convention and herzi PR #1 (draft), which say `redbull.io/claimed`. It is the plan on
+herzi's branch `docs/retire-used-servers-plan` (`578edf1`, 2026-11-19, no PR, its decisions marked
+approved), which lets a NodePool carry that one `DoesNotExist` and nothing else. The setting stays
+empty, with no default, until herzi ships the label.
 herzi main (`0ef4d2a`) labels nothing and collects nothing. The order is the convention's either
 way: the mark and the backfill before the exclusion.
 
@@ -303,7 +305,8 @@ migration for decommissioning (09).
 - Zones are soft (`assessment-brief.md` §4) or physical (the convention §2); and server-scan,
   named as the zone's source, has no zone yet.
 - The used-Agent label: `redbull.io/claimed` (the convention, herzi PR #1) or
-  `redbull.io/ever-installed` (herzi's `docs/retire-used-servers-plan`), §5.
+  `redbull.io/ever-installed` (herzi's `docs/retire-used-servers-plan`), §5. Decided since: the
+  user chose `redbull.io/ever-installed` (2026-11-23, ADR-0065's amendment).
 - `components.json` (11-22) says update-nodepool is "on branch feat/update-nodepool, not merged";
   it is merged and in production (the ecosystem README's workflows table, 2026-11-23). It says
   Wingman's add-servers and upgrades are "off by default", and has "No tenant role yet".

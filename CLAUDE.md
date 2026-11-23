@@ -214,9 +214,11 @@ and write yours here.
   Inventory and as day2 destinations, attributing an available Agent by the
   MCE's Agents, retiring ADR-0064; and the convention's items nothing
   deployed needs yet (seed and KV day1 layout, reserved flavors, the chart's
-  label selectors and `nodeLabels`, `redbull.io/claimed`).
-- When herzi marks used Agents: set `day1.excludedAgentLabels`
-  (`redbull.io/claimed`, the convention's §5).
+  label selectors and `nodeLabels`, the used-Agent mark).
+- When herzi ships its used-Agent label: set `day1.excludedAgentLabels`
+  to `redbull.io/ever-installed` (the user, 2026-11-23; ADR-0065's
+  amendment). It differs from the convention's §5 `redbull.io/claimed` on
+  purpose, and stays empty, with no default, until then.
 - The air-gap: `docs/upgrade/3.52-to-3.53.md`, then 3.53-to-3.54's checks.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).

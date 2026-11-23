@@ -144,7 +144,9 @@ serves a tenant; 9 to 14 when their dependency ships.
 6. **The capacity policy file**: which repo and path, and who approves its merge requests?
 7. **The used-Agent label's key**: `redbull.io/claimed` (the convention, herzi PR #1) or
    `redbull.io/ever-installed` (herzi's `docs/retire-used-servers-plan`)? Wingman's setting takes
-   either; herzi's plan accepts exactly one key.
+   either; herzi's plan accepts exactly one key. **Decided (the user, 2026-11-23):
+   `redbull.io/ever-installed`**, unlike the convention (ADR-0065's amendment); the setting stays
+   empty until herzi ships it.
 8. **The seed folder's name**: create-vm on `main` reads `ocp4-seed-<site>-<zone>`, its redesign
    (workflows PR #26) `ocp4-<lifecycle>-seed-<site>-<id>`, the convention
    `ocp4-<lifecycle>-seed-<site>-<zone>-<id>`. Wingman's kinds (item 1) follow the convention;
