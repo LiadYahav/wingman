@@ -128,8 +128,8 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   older InfraEnvs have none, so Inventory marks them).
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
-uninstall walks a few sample phases, about 8 s each, then frees the server and removes its
-Machine; the NodePool's replacement Machine then waits for a free Agent. On Inventory Management
+uninstall walks a few sample phases, about 8 s each, then leaves the server a free Agent in its
+MCE and removes its Machine; the NodePool's replacement Machine then waits for a free Agent. On Inventory Management
 (`/inventory`), add `DAY1_ADD_SERVERS=true` to add servers: a run walks a few sample phases,
 about 8 s each, takes a server and leaves it in the MCE's inventory; herzi's runs show beside it. The fake fleet is
 refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.

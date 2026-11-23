@@ -75,7 +75,7 @@ def fleet_adapters(
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
         naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
         mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)
-        workflow.after_uninstall(mce.remove_server)
+        workflow.after_uninstall(mce.free_server)
         return mce, fake, workflow
     inventory = http_inventory(settings, metrics=metrics, closers=closers)
     uninstall: UninstallWorkflow | None = None

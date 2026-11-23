@@ -138,16 +138,17 @@ async def test_the_sandbox_naming_builds_the_same_story_in_its_own_namespaces() 
     assert [len(p.nodes) for p in lark.node_pools] == [3, 2]
 
 
-async def test_a_completed_uninstall_removes_the_node_and_the_pool_waits_for_an_agent() -> None:
+async def test_a_completed_uninstall_frees_the_agent_and_the_pool_waits_for_one() -> None:
     hub = fake()
     target = "ocp-dell-r660-site1-128c-1024gb-DLFAKE0103"
-    assert hub.remove_server(target.upper())
+    assert hub.free_server(target.upper())
     in_place = (await view(hub, "ocp4-prod-lark-site1")).node_pools[0]
     assert target not in {n.server_name for n in in_place.nodes}
     (backfill,) = [n for n in in_place.nodes if n.state is NodeState.WAITING]
     assert backfill.machine is not None and backfill.machine.endswith("-b0001")
-    assert backfill.waiting_for is not None and "none is free (2 bound)" in backfill.waiting_for
-    assert not hub.remove_server("ocp-nope")
+    # The freed server is that free Agent: its NodePool may take it again
+    assert backfill.waiting_for == "Waiting for the Agent provider to reserve the 1 free Agent"
+    assert not hub.free_server("ocp-nope")
 
 
 async def test_the_fake_workflow_tells_the_fake_mce_when_a_run_completes() -> None:

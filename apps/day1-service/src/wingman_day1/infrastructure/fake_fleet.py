@@ -8,9 +8,12 @@ only) seeds them from the fixture. They raise the same domain errors as the
 real adapters.
 
 An uninstall walks through a few sample phases on the injected clock and then
-frees the server, and its hooks remove the node from the fake MCE (which
-backfills a Machine that waits for an Agent), so the local demo shows the
-whole flow. The phases are a
+leaves the server a free Agent in its MCE, as uninstall-server-from-hc does
+since 2026-11-19 (taking it out of the MCE is remove-server-from-mce's): no
+lock while it runs, the server in server-scan's MCE inventory afterwards
+(``INSTALLED_TO_INVENTORY``), and its hooks free the node's Agent in the fake
+MCE (which backfills a Machine that waits for an Agent), so the local demo
+shows the whole flow. The phases are a
 sample for the demo, nothing more: day1 passes the real workflow's phases
 through and keeps no list of them. A second start while one runs answers
 like the orchestrator's 409, and a server the fake does not know fails its
@@ -34,21 +37,17 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
-from wingman_day1.domain.servers import (
-    UNINSTALL_HOLDER,
-    RunSummary,
-    ServerRow,
-    uninstall_workflow_id,
-)
+from wingman_day1.domain.mce_capacity import SPARE_STATE
+from wingman_day1.domain.servers import RunSummary, ServerRow, uninstall_workflow_id
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.parse import server_row
 
 DEMO_PHASES: Final = (
     "checking-inventory",
-    "draining-node",
+    "inspecting",
     "awaiting-machine-deletion",
-    "removing-from-inventory",
+    "verifying-agent",
 )
 """A few of the real workflow's steps, for the demo only."""
 PHASE_SECONDS: Final = 8.0
@@ -67,7 +66,7 @@ class _Run:
 
 
 class FakeUninstallWorkflow:
-    """An ``UninstallWorkflow`` whose runs walk the demo phases and then free their server."""
+    """An ``UninstallWorkflow`` whose runs walk the demo phases and leave a free Agent."""
 
     def __init__(
         self,
@@ -93,7 +92,7 @@ class FakeUninstallWorkflow:
         inventory.before_read(self._advance)
 
     def after_uninstall(self, hook: Callable[[str], object]) -> None:
-        """Call ``hook(server_name)`` when a run completes: the fake MCE drops its node."""
+        """Call ``hook(server_name)`` when a run completes: the fake MCE frees its Agent."""
         self._completed.append(hook)
 
     async def runs(self) -> list[RunSummary]:
@@ -125,7 +124,6 @@ class FakeUninstallWorkflow:
             run.error = f"ServerNotFoundError: server-scan has no server named {server_name} (fake)"
         else:
             run.phase = DEMO_PHASES[0]
-            self._inventory.replace(dataclasses.replace(server, reserved_by=UNINSTALL_HOLDER))
         self._runs.append(run)
         return WorkflowRun(workflow_id, "running")
 
@@ -145,11 +143,9 @@ class FakeUninstallWorkflow:
                 continue
             run.status, run.phase = "completed", "completed"
             server = self._inventory.by_id(run.server_id) if run.server_id else None
-            if server is not None:  # it leaves the cluster, then the MCE: free in server-scan
+            if server is not None:  # out of its cluster, a free Agent in its MCE's inventory
                 self._inventory.replace(
-                    dataclasses.replace(
-                        server, state="AVAILABLE", cluster_name=None, mce=None, reserved_by=None
-                    )
+                    dataclasses.replace(server, state=SPARE_STATE, cluster_name=None)
                 )
                 for hook in self._completed:
                     hook(server.name)

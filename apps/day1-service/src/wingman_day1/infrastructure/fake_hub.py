@@ -7,15 +7,18 @@ not found (a list that was not seeded is empty, as a namespace without
 objects lists on a real hub). Each hub's own nodes and its pods per node are
 seeded per MCE (placement's free pods, ADR-0050).
 
-``remove_server`` is what a completed uninstall leaves on a real MCE: the
-server's Agent, AgentMachine and Machine are gone, and the NodePool's
-MachineSet creates a replacement Machine that waits for a free Agent.
+``free_server`` is what a completed uninstall leaves on a real MCE since
+uninstall-server-from-hc ends at a free Agent: the server's AgentMachine and
+Machine are gone, its Agent is unbound and free in its InfraEnv, and the
+NodePool's MachineSet creates a replacement Machine that waits for a free Agent
+(the provider may take this one again; the fake does not pick for it).
 """
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 
 from wingman_day1.domain.errors import (
     HubDeniedError,
@@ -25,6 +28,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
+    AGENT_MACHINE_REF_LABEL,
     INFRA_ENV_LABEL,
     AgentMachineObservation,
     AgentObservation,
@@ -213,17 +217,21 @@ class FakeHubApi:
         self._check(mce)
         return dict(self._pods.get(mce, {}))
 
-    def remove_server(self, server_name: str) -> bool:
-        """Remove the Agent, AgentMachine and Machine of a server, and backfill its Machine.
+    def free_server(self, server_name: str) -> bool:
+        """Unbind a server's Agent, remove its AgentMachine and Machine, and backfill the Machine.
 
         The server is found by its Agent's BareMetalHost label (ignoring case).
-        Returns whether anything was removed.
+        Returns whether it was found.
         """
         for (mce, _), agents in self._agents.items():
             agent = next((a for a in agents if (a.bmh or "").lower() == server_name.lower()), None)
             if agent is None:
                 continue
-            agents.remove(agent)
+            labels = {k: v for k, v in agent.labels.items() if k != AGENT_MACHINE_REF_LABEL}
+            free = replace(
+                agent, labels=labels, state="known-unbound", stage=None, conditions=FREE_AGENT
+            )
+            agents[agents.index(agent)] = free
             for (am_mce, namespace), agent_machines in self._agent_machines.items():
                 if am_mce != mce:
                     continue

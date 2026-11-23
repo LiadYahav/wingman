@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, PowerOff, Replace, Undo2, Unplug, type LucideIcon } from "lucide-react";
+import { Loader2, Replace, Server, Undo2, Unplug, type LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ProblemList } from "@/components/common/problem-list";
@@ -18,12 +18,12 @@ import type { ServerRecord, WorkflowRun } from "@/types";
 const SUMMARY: { icon: LucideIcon; text: string; emphasis?: boolean }[] = [
   { icon: Unplug, text: "Drains the node and deletes its Machine." },
   {
-    icon: PowerOff,
-    text: "Takes the server out of the hosted cluster, then out of the MCE: it is powered off, its BareMetalHost and Agent are removed, and server-scan shows it free afterwards.",
+    icon: Server,
+    text: "Takes the server out of the hosted cluster and stops there: it stays in the MCE, a free Agent in its InfraEnv, with its BareMetalHost. Taking it out of the MCE is another workflow, remove-server-from-mce.",
   },
   {
     icon: Replace,
-    text: "Leaves the NodePool's size as it is, so the NodePool binds a replacement node. This is a replacement, not a shrink.",
+    text: "Leaves the NodePool's size as it is, so the NodePool binds a replacement node, which may be this same server. This is a replacement, not a shrink.",
     emphasis: true,
   },
   { icon: Undo2, text: "Undoes nothing if it fails. Running it again resumes." },

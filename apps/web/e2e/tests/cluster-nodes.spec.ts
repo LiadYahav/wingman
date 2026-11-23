@@ -312,6 +312,9 @@ test.describe("Uninstall", () => {
     await uninstallOf(page, target.name).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("This is a replacement, not a shrink.", { exact: false })).toBeVisible();
+    // Since 2026-11-19 the workflow stops at a free Agent: the server stays in the MCE
+    await expect(dialog.getByText("it stays in the MCE, a free Agent in its InfraEnv", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("then out of the MCE", { exact: false })).toHaveCount(0);
     const identity = dialog.getByTestId("uninstall-node-identity");
     await expect(identity).toContainText(`Machine ${R660}-b2c4d`);
     await expect(identity).toContainText(`NodePool ${R660}`);

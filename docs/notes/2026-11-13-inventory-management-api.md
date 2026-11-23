@@ -229,7 +229,9 @@ Read 2026-11-13 from team-redbull's public repositories.
 - **Who takes it:** the add-server-to-mce workflow (holder
   `add-server-to-mce`, or `install-server` for a run started before the
   rename): 2 h while installing, 24 h on success; the uninstall-server-from-hc
-  workflow (holder `uninstall-server-from-hc`); and a person only through
+  workflow (holder `uninstall-server-from-hc`) for runs recorded before
+  2026-11-19 only (a new run takes no lock and ends at a free Agent); and a
+  person only through
   server-scan's admin API (`POST/DELETE /servers/{id}/reservation`; its UI
   has no such button). **herzi never calls server-scan**: it starts pool
   draws with `count` and treats a reserved server as a shortage.

@@ -1,7 +1,7 @@
 # ADR-0038: Cluster nodes come from the MCE by NodePool, joined to server-scan; uninstall starts the platform's workflow
 
 Date: 2026-11-11
-Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache); amended 2026-11-23 (a cluster's nodes are for admins only)
+Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache); amended 2026-11-23 (a cluster's nodes are for admins only); amended 2026-11-23 (3.54.0: an uninstall ends at a free Agent, with no lock)
 
 ## Context
 
@@ -235,3 +235,40 @@ is the admin's without those fields); `apps/web/lib/cluster-tabs.test.ts`
 and `lib/nodes.test.ts`; the Playwright specs `cluster-nodes.spec.ts` (no
 Nodes tab, no inline nodes, no nodes read), `cluster-scale.spec.ts`,
 `cluster-upgrade.spec.ts` and `flavor-rollout.spec.ts`.
+
+## Amendment (2026-11-23, 3.54.0): an uninstall ends at a free Agent
+
+The platform's `uninstall-server-from-hc` changed on 2026-11-19 (the
+operator; read 2026-11-23 at team-redbull/workflows `29ef001`). A new run
+takes the server out of its hosted cluster and **stops once its Agent is
+free**: unbound, approved, its BareMetalHost present (`verifying-agent`).
+The server stays in its MCE's InfraEnv with its BareMetalHost,
+NMStateConfig, Agent and PXE mapping; taking it out of the MCE is
+`remove-server-from-mce`, its own route, which Wingman does not start. A new
+run **takes no server-scan lock** (the server is never `AVAILABLE` while it
+moves). Runs recorded before then still lock the server and end in
+`remove-server-from-mce` as an awaited child. The start's request and answer
+did not change, so nothing Wingman sends or reads changes.
+
+- **The confirmation says what happens now**: the server leaves the hosted
+  cluster and stays in the MCE as a free Agent in its InfraEnv; leaving the
+  MCE is another workflow. The NodePool keeps its size and binds a
+  replacement, which may be this same server (the run then stops with
+  `AgentRetakenError`, in the workflow's words). No longer "then out of the
+  MCE … server-scan shows it free".
+- **Finding a server's run through server-scan's lock** (Decision, Runs;
+  Consequences, an older running run) holds for runs recorded before
+  2026-11-19 only. A new run is found by its deterministic id in the run
+  list; one older than the list's 200 newest is not shown while it runs.
+- **"Another run's lock"** in what the workflow checks (Decision, Uninstall)
+  is another workflow's lock: an add-server run's, or a recorded uninstall's.
+- **The fake fleet** follows the workflow: a fake run takes no lock, walks
+  sample phases ending in `verifying-agent`, and leaves its server
+  `INSTALLED_TO_INVENTORY` on its MCE in the fake server-scan; the fake MCE
+  frees its Agent (`FakeHubApi.free_server`, which replaces `remove_server`)
+  and backfills the Machine, which waits for the free Agent.
+
+Verification: `tests/unit/infrastructure/test_fake_fleet.py` (no lock, the
+server in its MCE's inventory at the end) and `test_fake_mce.py` (the freed
+Agent, the backfill waiting for it); `apps/web/e2e/tests/cluster-nodes.spec.ts`
+(the confirmation's sentences).
