@@ -3,7 +3,7 @@
 A start is a write: sent once, never retried (ADR-0006). Refused before it
 left is "nothing sent"; sent and unanswered may have happened. The run is
 read leniently, its child's phase by the child's own id. The bodies and the
-answers are the update-nodepool branch's (``UpdateNodePoolRequest``,
+answers are update-nodepool's on team-redbull/workflows main (``UpdateNodePoolRequest``,
 ``UpdateNodePoolResult``, the design page's example), which forbids any
 field it does not name.
 """

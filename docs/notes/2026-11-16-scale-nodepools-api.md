@@ -7,17 +7,18 @@ Wingman starts it from the cluster page's Nodes tab and shows its run there
 starts a run and shows it: the plan, its checks and its phase list are the
 workflow's (the rule of ADR-0038, ADR-0042 and ADR-0055).
 
-Source: `team-redbull/workflows`, branch `feat/update-nodepool` (not merged,
-no PR yet): `workflow_domains/server_lifecycle/router.py`
+Source: `team-redbull/workflows` `main` (merged from `feat/update-nodepool`,
+in production by 2026-11-23): `workflow_domains/server_lifecycle/router.py`
 (`UpdateNodePoolRequest`, `start_update_nodepool`),
 `workflow_domains/server_lifecycle/update_nodepool.py`,
 `shared/models/server_lifecycle.py` (`UpdateNodePoolInput`,
 `NodePoolProgress`, `UpdateNodePoolResult`, `NodePoolScaleResult`,
 `ScaleDownChoice`), `shared/exceptions.py`, `shared/workflow_ids.py`,
 `workflow_domains/routers/runs.py` and the design page
-`docs/site/server-lifecycle/update-nodepool.html`. The branch can still
-change: day1 reads its answers leniently. Last matched: b1976f4 and
-aab8949 (2026-11-18: one NodePool a run, ADR-0062's 2026-11-18 amendment).
+`docs/site/server-lifecycle/update-nodepool.html`. Day1 reads its answers
+leniently. Last matched on the branch: b1976f4 and aab8949 (2026-11-18: one
+NodePool a run, ADR-0062's 2026-11-18 amendment); its start is the same on
+`main` (`29ef001`, read 2026-11-23).
 
 ## 1. What the workflow takes and does
 

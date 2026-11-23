@@ -14,7 +14,8 @@ which servers leave on a scale-down: CAPI picks at random.
 
 The platform team wrote the `update-nodepool` workflow (team-redbull/workflows,
 branch `feat/update-nodepool`, designed with the operator 2026-11-03 and
-2026-11-08; not merged yet). `POST /workflows/server-lifecycle/update-nodepool`
+2026-11-08; not merged then, merged and in production since: the
+2026-11-23 amendment). `POST /workflows/server-lifecycle/update-nodepool`
 takes `{mce_cluster, cluster, replicas}` and exactly one of `infra_env_kind`
 (a total spread over the cluster's NodePools of that InfraEnv kind, within
 one replica of each other) and `nodepool` (that one, set exactly). The run
@@ -164,7 +165,7 @@ change only through update-nodepool.**
   run is `get_run`, twice while a child runs (`docs/ops/metrics.md`). No
   cluster, NodePool or kind in the labels.
 - New problem code: `SCALE_ALREADY_RUNNING`.
-- The contract is the workflow's branch until it merges; Wingman's adapter
+- The contract was the workflow's branch until it merged (it is main since); Wingman's adapter
   and parsing stay thin and tolerant, and a field it adds is ignored until
   Wingman reads it. The orchestrator's `error` is the root failure's
   message only: the type is shown when the words name one (a child's
@@ -592,7 +593,8 @@ without the input, a flow mapping refused).
 
 ## Amendment (2026-11-19): a 404 to the start is an orchestrator without update-nodepool
 
-The workflow is not merged or deployed yet. The user (2026-11-19): send
+The workflow was not merged or deployed yet (it is since: the 2026-11-23
+amendment). The user (2026-11-19): send
 the start to its path now; it answers 404 today, and once the workflow is
 deployed the same request answers 202, with no change in Wingman. Scale
 sends the same start to every orchestrator. Only how a 404 reads changes.
