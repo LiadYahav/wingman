@@ -23,7 +23,7 @@ FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
 
 
 def segments_manager_ui(settings: Day1Settings) -> str:
-    """segments-manager's UI for people (the cluster page's and the top bar's links); "": none."""
+    """segments-manager's UI for people (the cluster page's and the sidebar's links); "": none."""
     fake = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
     return settings.segments_manager_ui_base or fake
 

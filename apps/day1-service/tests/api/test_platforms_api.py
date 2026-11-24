@@ -1,7 +1,7 @@
-"""``GET /api/day1/platforms``, the top bar's links (ADR-0066).
+"""``GET /api/day1/platforms``, the Infrastructure sidebar's links (ADR-0066, ADR-0067).
 
 The team keeps segments-manager and server-scan apart from Wingman: an
-admin's top bar links to each one's own UI, and Wingman serves no page of its
+admin's Infrastructure sidebar links to each one's own UI, and Wingman serves no page of its
 own for either (their areas were removed). The cluster's network, the Nodes
 tab, placement and Inventory Management read the same systems through their
 own routes.

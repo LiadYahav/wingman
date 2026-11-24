@@ -284,7 +284,7 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day1/platforms` | The systems the Infrastructure sidebar links out to (ADR-0066, ADR-0067): `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the top bar opens in a new tab. Read from the settings: nothing is called |
+| `GET` | `/api/day1/platforms` | The systems the Infrastructure sidebar links out to (ADR-0066, ADR-0067): `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the sidebar opens in a new tab under `name`. Read from the settings: nothing is called |
 
 #### Inventory Management (admins only, ADR-0057 and ADR-0067)
 

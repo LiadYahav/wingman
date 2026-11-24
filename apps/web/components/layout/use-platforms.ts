@@ -5,14 +5,14 @@ import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { Platform } from "@/types";
 
-/** How long the top bar trusts the list: it changes only with day1's settings. */
+/** How long the sidebar trusts the list: it changes only with day1's settings. */
 const PLATFORMS_STALE_MS = 5 * 60_000;
 
 /**
- * The systems beside Wingman, each with its own UI's address (ADR-0066).
- * Asked by admins only, as
- * day1 answers it; a viewer, an answer still on its way and a failed read are
- * all `[]`: no link out.
+ * The systems beside Wingman, each with its name and its own UI's address
+ * (ADR-0066), for the Infrastructure sidebar's links out (ADR-0067). Asked by
+ * admins only, as day1 answers it; a viewer, an answer still on its way and a
+ * failed read are all `[]`: no link out.
  */
 export function usePlatforms(): Platform[] {
   const admin = useIsAdmin();

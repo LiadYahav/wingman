@@ -361,7 +361,7 @@ class Day1Settings(BaseSettings):
 
     @property
     def server_scan_ui_base(self) -> str:
-        """Where node links and the top bar's link point: ``SERVER_SCAN_UI_URL``, else the API's."""
+        """Where node links and the sidebar's link point: ``SERVER_SCAN_UI_URL``, else the API's."""
         return self.server_scan_ui_url or self.server_scan_url
 
     @property

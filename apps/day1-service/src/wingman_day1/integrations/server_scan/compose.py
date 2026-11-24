@@ -4,7 +4,7 @@ This builds the HTTP adapter (``platform_adapters`` picks it, none, or the
 fake fleet's) and puts the one cache in front of it, which the Nodes tab,
 placement and Inventory Management share. Kept apart so ``main`` stays one
 screen of wiring per system. ``server_scan_ui`` is where a person's browser
-finds server-scan: the node links and the top bar's link.
+finds server-scan: the node links and the Infrastructure sidebar's link.
 """
 
 from __future__ import annotations

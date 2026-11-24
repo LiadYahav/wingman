@@ -9,11 +9,13 @@ const APART: Platform[] = [
 ];
 
 describe("the links out to the systems apart from Wingman", () => {
-  it("link each system's own UI, in day1's order", () => {
+  it("link each system's own UI under day1's name for it, in day1's order", () => {
     expect(linksOut(APART)).toEqual([
       { id: "segments", label: "Segments Manager", href: "https://segments-manager.example" },
       { id: "server-scan", label: "Server Scan", href: "https://server-scan.example" },
     ]);
+    // day1's name is the only source: the web keeps no word of its own
+    expect(linksOut([{ ...APART[0], name: "Segments" }])[0].label).toBe("Segments");
   });
 
   it("list nothing for a system day1 has no address for, and nothing for a viewer", () => {

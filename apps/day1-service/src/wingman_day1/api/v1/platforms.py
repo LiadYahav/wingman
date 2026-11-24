@@ -1,8 +1,8 @@
-"""The top bar's systems: segments-manager's and server-scan's own UIs (2026-11-23).
+"""The Infrastructure sidebar's systems: segments-manager's and server-scan's own UIs.
 
 Admins only, as Quick Links (decision 13 of ``docs/ideas/single-pane.md``,
 until RBAC). Built from the settings at start: nothing is called. ADR-0066
-says why the top bar links out.
+says why Wingman links out, ADR-0067 why from Infrastructure's sidebar.
 """
 
 from __future__ import annotations

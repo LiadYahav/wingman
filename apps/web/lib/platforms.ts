@@ -22,9 +22,6 @@ export const WINGMAN = {
   ] satisfies Credit[],
 };
 
-/** The sidebar's word for each system beside Wingman. */
-const LABELS: Record<Platform["id"], string> = { segments: "Segments Manager", "server-scan": "Server Scan" };
-
 /** A link out of Wingman: another system's own UI, opened in a new tab. */
 export interface LinkOut {
   id: Platform["id"];
@@ -34,10 +31,11 @@ export interface LinkOut {
 
 /**
  * Each system day1 lists (`GET /api/day1/platforms`, admins only, so a
- * viewer's list is empty) whose UI it knows, in day1's order.
+ * viewer's list is empty) whose UI it knows, in day1's order and under day1's
+ * name for it.
  */
 export function linksOut(platforms: readonly Platform[]): LinkOut[] {
   return platforms
     .filter((platform) => platform.url)
-    .map((platform) => ({ id: platform.id, label: LABELS[platform.id], href: platform.url }));
+    .map((platform) => ({ id: platform.id, label: platform.name, href: platform.url }));
 }

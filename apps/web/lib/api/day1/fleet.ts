@@ -3,7 +3,7 @@
  * Wingman), an MCE's InfraEnvs and OpenShift versions (ADR-0034), MCE
  * placement for a new cluster (ADR-0050), the machine configs a nodepool can
  * name (ADR-0027), its tuning profiles (ADR-0061), Quick Links (ADR-0052) and
- * the top bar's systems beside Wingman (ADR-0066).
+ * the systems beside Wingman that Infrastructure's sidebar links to (ADR-0066).
  */
 
 import { api } from "@/lib/api-client";
@@ -38,6 +38,6 @@ export const fleetApi = {
   machineConfigs: () => api.get<MachineConfigs>("/api/day1/machine-configs"),
   tuningProfiles: () => api.get<TuningProfiles>("/api/day1/tuning-profiles"),
   quickLinks: () => api.get<QuickLinks>("/api/day1/quick-links"),
-  /** The top bar's systems: each one's own UI (admins only). */
+  /** The systems beside Wingman: each one's name and own UI (admins only). */
   platforms: () => api.get<Platforms>("/api/day1/platforms"),
 };
