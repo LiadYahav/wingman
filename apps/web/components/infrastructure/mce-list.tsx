@@ -5,7 +5,8 @@ import { ChevronRight, ServerCog, TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { customerMcesBySite, mceServersHref } from "@/lib/infrastructure";
+import { customerMcesBySite } from "@/lib/infrastructure";
+import { inventoryHref } from "@/lib/inventory/view";
 import { plural } from "@/lib/utils";
 import type { Mce } from "@/types";
 import { CreateMcePreview } from "./create-mce-preview";
@@ -52,7 +53,7 @@ function MceRow({ mce }: { mce: Mce }) {
       <td className={CELL}>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={mceServersHref(mce.name)}
+            href={inventoryHref(mce.name)}
             aria-label={`${mce.name}: its servers in Inventory Management`}
             className="font-mono text-[13px] font-medium break-all outline-none after:absolute after:inset-0 after:rounded-sm focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring/60"
             data-testid="mce-link"

@@ -41,7 +41,7 @@ export function UsedCount({
 export function UsedUnread({ mce }: { mce: MceInventory }) {
   if (mce.used !== null || !mce.used_error) return null;
   return (
-    <p className="mt-1 text-xs text-muted-foreground" data-testid="mce-used-unread">
+    <p className="text-xs text-muted-foreground" data-testid="mce-used-unread">
       Used Agents not read: {mce.used_error}
     </p>
   );
@@ -56,7 +56,7 @@ export function UsedUnread({ mce }: { mce: MceInventory }) {
 export function UnguardedNotice({ mce, labels }: { mce: MceInventory; labels: UsedLabels }) {
   if (!showUnguarded(mce, labels)) return null;
   return (
-    <details className="mt-2 rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs" data-testid="mce-unguarded">
+    <details className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs" data-testid="mce-unguarded">
       <summary className="flex cursor-pointer items-center gap-1.5 text-status-warning-fg">
         <TriangleAlert aria-hidden className="h-3.5 w-3.5 shrink-0" />
         <span>{unguardedSummary(mce, labels)}</span>

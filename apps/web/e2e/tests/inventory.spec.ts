@@ -11,7 +11,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
 import {
-  DONOR, FREE, LOCKED, OVERVIEW, R650, R650_NAMES, SITE1_A, SITE1_B, SITE1_B_POOL, STARTED, off, setUpInventory,
+  DONOR, FREE, LOCKED, OVERVIEW, R650, R650_NAMES, SITE1_A, SITE1_B, SITE1_B_POOL, SITE1_C, STARTED, off, setUpInventory,
 } from "../fixtures/inventory";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
@@ -82,9 +82,24 @@ test.describe("The pools", () => {
     await expect(r650).toContainText("dell PowerEdge R650 ×2");
     await expect(pool(page, "")).toContainText("No single InfraEnv");
     await expect(pool(page, "").getByRole("button", { name: /Install servers/ })).toHaveCount(0);
+    // One MCE at a time: the others are a pick away, each with its available Agents
+    await expect(card(page, SITE1_B)).toHaveCount(0);
+    await choose(page, page.getByTestId("mce-picker"), SITE1_B);
     await expect(card(page, SITE1_B).getByTestId("mce-pools-from-day1")).toContainText("Pools named by this MCE's cluster files");
     await expect(card(page, SITE1_B).locator(`tr[data-pool="${SITE1_B_POOL}"]`)).toBeVisible();
-    await expect(page.getByTestId("quiet-mces")).toContainText("ocp4-prod-mce-site1-c");
+    await expect(page.getByTestId("inventory-total")).toContainText("10 available across 3 MCEs");
+  });
+
+  test("an MCE server-scan names nothing on is still offered, marked, and says so", async ({ page }) => {
+    await setUpInventory(page);
+    await go(page, "/inventory");
+    await page.getByTestId("mce-picker").click();
+    const quiet = page.getByRole("option").filter({ has: page.getByText(SITE1_C, { exact: true }) });
+    await expect(quiet).toContainText("not in server-scan");
+    await expect(page.getByRole("option").filter({ has: page.getByText(SITE1_A, { exact: true }) })).toContainText("6 available");
+    await quiet.click();
+    await expect(card(page, SITE1_C).getByTestId("mce-unknown-counts")).toContainText("not in server-scan");
+    await expect(card(page, SITE1_C).getByTestId("mce-no-pools")).toContainText("No pools on this MCE");
   });
 
   test("a pool's servers show the lock and maintenance, and are read only when opened", async ({ page }) => {
@@ -210,7 +225,7 @@ test.describe("Adding servers", () => {
 });
 
 test.describe("Install servers from the header", () => {
-  test("picks the MCE and a pool it knows, and sends the count once to that pool", async ({ page }) => {
+  test("opens on the MCE shown, picks another and a pool it knows, and sends the count once to that pool", async ({ page }) => {
     const calls = await setUpInventory(page);
     await go(page, "/inventory");
     await page.getByTestId("install-servers").click();
@@ -218,7 +233,7 @@ test.describe("Install servers from the header", () => {
     await expect(dialog(page).getByRole("heading", { name: "Install servers" })).toBeVisible();
     const submit = dialog(page).getByRole("button", { name: "Install 1" });
     await expect(submit).toBeDisabled();
-    await expect(dialog(page).getByRole("combobox", { name: "InfraEnv" })).toBeDisabled();
+    await expect(dialog(page).getByRole("combobox", { name: "MCE" })).toContainText(SITE1_A);
     await choose(page, dialog(page).getByRole("combobox", { name: "MCE" }), SITE1_B);
     await choose(page, dialog(page).getByRole("combobox", { name: "InfraEnv" }), SITE1_B_POOL);
     // Its pools come from its cluster files: their agentLabels, and so their servers' names, are unknown

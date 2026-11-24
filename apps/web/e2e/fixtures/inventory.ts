@@ -35,6 +35,8 @@ export const UNLABELLED_PROBLEMS = ["redbull.io/flavor is missing", "redbull.io/
 export const SITE1_B = "ocp4-prod-mce-site1-b";
 /** The one InfraEnv site1-b's cluster files name: its own list, and so its labels, could not be read. */
 export const SITE1_B_POOL = "r760-mtl-az1";
+/** server-scan names no server on it, and its InfraEnvs are unknown. */
+export const SITE1_C = "ocp4-prod-mce-site1-c";
 /** herzi's mark on a used Agent (ADR-0065's amendment): such a free Agent is never available. */
 export const HERZI_LABEL = "redbull.io/ever-installed";
 
@@ -65,7 +67,7 @@ export const OVERVIEW: InventoryOverview = {
       used: null, used_error: null, unguarded: [],
     },
     {
-      site: "site1", mce: "ocp4-prod-mce-site1-c", known: false, servers: 0, in_clusters: 0, available: 0, usable: 0,
+      site: "site1", mce: SITE1_C, known: false, servers: 0, in_clusters: 0, available: 0, usable: 0,
       ready: 0, needs_fix: 0, total: 0, pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce",
       used: 0, used_error: null, unguarded: [],
     },

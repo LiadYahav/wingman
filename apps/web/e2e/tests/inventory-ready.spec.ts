@@ -1,6 +1,6 @@
 /**
- * Inventory Management's Ready, Needs fix and Total, collapsing an MCE, and
- * installing a server that needs a fix (mocked; ADR-0057's 3.38.0 amendment,
+ * Inventory Management's Ready, Needs fix and Total, and installing a server
+ * that needs a fix (mocked; ADR-0057's 3.38.0 amendment,
  * docs/notes/2026-11-13-inventory-management-api.md). A pool draw never
  * sends the workflow's `allow_unhealthy`; a named server that needs a fix is
  * sent with it only after the confirmation step, and Back sends nothing.
@@ -8,7 +8,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go } from "../fixtures/api-handlers";
-import { FREE, LOCKED, OVERVIEW, R650, SICK, SITE1_A, SITE1_B, setUpInventory } from "../fixtures/inventory";
+import { FREE, LOCKED, OVERVIEW, R650, SICK, SITE1_A, setUpInventory } from "../fixtures/inventory";
 
 const card = (page: Page, mce: string) => page.locator(`section[data-mce="${mce}"]`);
 const pool = (page: Page, infraEnv: string) => card(page, SITE1_A).locator(`tr[data-pool="${infraEnv}"]`);
@@ -20,38 +20,6 @@ async function chooseServers(page: Page, ...names: string[]) {
   await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
   for (const name of names) await dialog(page).getByRole("checkbox", { name: `Install ${name}` }).click();
 }
-
-test.describe("Each MCE collapses", () => {
-  test("its title hides its pools, keeps its counts, and the browser remembers it", async ({ page }) => {
-    await setUpInventory(page);
-    await go(page, "/inventory");
-    const toggle = card(page, SITE1_A).getByRole("button", { name: SITE1_A, exact: true });
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(card(page, SITE1_A).getByRole("table")).toBeHidden();
-    await expect(card(page, SITE1_A).getByTestId("mce-available")).toHaveText("6 available");
-    await expect(card(page, SITE1_A).getByTestId("mce-total")).toContainText("8 total");
-    await expect(card(page, SITE1_B).getByRole("table")).toBeVisible();
-
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(card(page, SITE1_A).getByTestId("mce-toggle")).toHaveAttribute("aria-expanded", "false");
-    await expect(card(page, SITE1_A).getByRole("table")).toBeHidden();
-    await expect(card(page, SITE1_B).getByTestId("mce-toggle")).toHaveAttribute("aria-expanded", "true");
-  });
-
-  test("by keyboard: Enter and Space toggle it", async ({ page }) => {
-    await setUpInventory(page);
-    await go(page, "/inventory");
-    const toggle = card(page, SITE1_B).getByTestId("mce-toggle");
-    await toggle.focus();
-    await page.keyboard.press("Enter");
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await page.keyboard.press("Space");
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(card(page, SITE1_B).getByRole("table")).toBeVisible();
-  });
-});
 
 test.describe("Ready, Needs fix and Total", () => {
   test("each pool shows them, the MCE its total, and each column says what it means", async ({ page }) => {

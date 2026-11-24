@@ -43,6 +43,8 @@ test("used Agents are counted apart on the MCE and the pool, and say why", async
   await pool.getByTestId("pool-used").hover();
   await expect(tooltip(page)).toContainText(`waiting for herzi to remove: ${USED.join(", ")}.`);
   await expect(tooltip(page)).toContainText(`labelled ${HERZI_LABEL}`);
+  await go(page, `/inventory?mce=${SITE1_B}`);
+  await expect(card(page, SITE1_B).getByTestId("mce-available")).toContainText("4 available");
   await expect(card(page, SITE1_B).getByTestId("mce-used")).toHaveCount(0); // not read there
 });
 
