@@ -20,6 +20,8 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Final
 
+from wingman_core.domain.release_tags import without_arch
+
 UPGRADE_WORKFLOW_PREFIX: Final = "upgrade-cluster-"
 """A cluster's upgrade run is ``upgrade-cluster-<file stem>``; the next upgrade reuses it."""
 VERSIONS_BY_UPGRADE: Final = "Versions change through Upgrade on the cluster page"
@@ -276,4 +278,4 @@ def _workertags(pools: object) -> dict[str, object]:
 
 def _bare(version: object) -> str | None:
     """``4.18.22-x86_64`` and ``4.18.22`` are the same release."""
-    return None if version is None else str(version).removesuffix("-x86_64")
+    return None if version is None else without_arch(str(version))

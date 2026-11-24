@@ -1,7 +1,7 @@
 # ADR-0034: A new cluster's OpenShift versions come from the upgrade ladder, per MCE
 
 Date: 2026-11-08
-Status: Accepted; amended 2026-11-13 (3.20.0: the clusters list's upgrade suggestion)
+Status: Accepted; amended 2026-11-13 (3.20.0: the clusters list's upgrade suggestion) and 2026-11-24 (3.58.1: any OpenShift architecture comes off a release, not only `-x86_64`)
 
 ## Context
 
@@ -100,3 +100,21 @@ The same list, per MCE, feeds the clusters list's "Upgrade available →
 `upgrade_hint` takes the newest release a cluster's MCE offers that is newer
 than its `mastertag`. It is a suggestion only; the upgrade-cluster workflow
 still plans every upgrade from the ladder itself.
+
+## Amendment (2026-11-24, 3.58.1)
+
+A release is compared without any architecture OpenShift publishes, not
+only `-x86_64`: `x86_64`, `aarch64`, `ppc64le`, `s390x` and `multi` come
+off as the tag's last part, so `4.20.44-aarch64` is `4.20.44` too, and a
+prerelease keeps its name (`4.20.0-rc.1-x86_64` is `4.20.0-rc.1`, no rung).
+The rule is `wingman_core.domain.release_tags.without_arch`; before, day1
+removed `-x86_64` alone, in two places, and its Quick Links cut a hub's
+version at its first `-`. The ladder itself stays bare (`4.N.N`).
+
+A cluster file's `mastertag` is checked against the same module's
+`is_release_tag`, the tags the hostedclusters-setup chart renders into a
+release image (`hc.releaseTag`: a bare `X.Y.Z` gets `-x86_64`, any other tag
+is the image's tag as written): `X.Y.Z`, then optionally `-` and lower-case
+letters, digits, `_`, `.` and `-`, at most 128 characters. A prerelease
+(`4.20.0-rc.1-x86_64`) is no longer refused; `4.20.44-X86` and
+`4.20.44-x86_64:latest` still are.

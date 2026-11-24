@@ -163,13 +163,24 @@ def test_mastertag_is_required() -> None:
     assert "mastertag is required" in rendered_file_problems(_without(VALID, "mastertag"))
 
 
-@pytest.mark.parametrize("tag", ["4.18", "latest", "v4.18.22", "4.18.22-X86"])
+@pytest.mark.parametrize(
+    "tag", ["4.18", "latest", "v4.18.22", "4.18.22-X86", "4.18.22-x86_64:latest", "4.18.22-"]
+)
 def test_a_mastertag_that_is_not_a_release_is_refused(tag: str) -> None:
     content = VALID.replace("4.18.22-x86_64", tag)
     assert any("is not an OpenShift release" in p for p in rendered_file_problems(content))
 
 
-@pytest.mark.parametrize("tag", ["4.18.22", "4.16.27-x86_64", "4.21.40-multi"])
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "4.18.22",
+        "4.16.27-x86_64",
+        "4.21.40-multi",
+        "4.18.22-aarch64",
+        "4.16.0-rc.1-x86_64",  # a prerelease, as the chart takes it (refused before 3.58.1)
+    ],
+)
 def test_releases_with_and_without_an_arch_are_accepted(tag: str) -> None:
     assert rendered_file_problems(VALID.replace("4.18.22-x86_64", tag)) == []
 

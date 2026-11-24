@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+from wingman_core.domain.release_tags import ARCHES
 from wingman_core.testing.fixtures import default_fixture_root
 from wingman_day1.domain.openshift_versions import (
     HostedMinors,
     Ladder,
     OpenShiftVersions,
     bare_release,
+    is_release,
     missing_ladder,
     missing_mce_rules,
     parse_ladder,
@@ -158,6 +160,22 @@ def test_a_release_is_compared_without_its_architecture_suffix() -> None:
     assert unhostable_problems("4.18.56", offered) == []
     assert unhostable_problems("4.19.53-x86_64", offered) == [
         "MCE m can host 4.18.56, 4.16.55; 4.19.53 is not one of them"
+    ]
+
+
+@pytest.mark.parametrize("arch", ARCHES)
+def test_a_release_for_any_architecture_is_that_release(arch: str) -> None:
+    offered = OpenShiftVersions("m", ("4.18.56",))
+    assert bare_release(f"4.18.56-{arch}") == "4.18.56"
+    assert is_release(f"4.18.56-{arch}")
+    assert unhostable_problems(f"4.18.56-{arch}", offered) == []
+
+
+def test_a_prerelease_keeps_its_name_and_is_no_rung_of_the_ladder() -> None:
+    assert bare_release("4.18.0-rc.1-x86_64") == "4.18.0-rc.1"
+    assert not is_release("4.18.0-rc.1-x86_64")
+    assert unhostable_problems("4.18.0-rc.1-x86_64", OpenShiftVersions("m", ("4.18.0",))) == [
+        "MCE m can host 4.18.0; 4.18.0-rc.1 is not one of them"
     ]
 
 

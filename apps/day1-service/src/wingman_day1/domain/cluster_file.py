@@ -37,6 +37,7 @@ import yaml
 from yaml.constructor import ConstructorError
 from yaml.resolver import BaseResolver
 
+from wingman_core.domain.release_tags import is_release_tag
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
 from wingman_day1.domain.excluded_agent_labels import edit_problems as agent_label_problems
@@ -52,7 +53,6 @@ AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tu
 PATH_KEYS: Final = ("clusterName", "site", "mce")
 """Passed by the ApplicationSet from the file's path; a rendered file must not set them."""
 
-_MASTERTAG = re.compile(r"^\d+\.\d+\.\d+(?:-[a-z0-9_]+)?$")
 _HEADER = re.compile(r"^#\s*(?P<key>specName|specVersion|wingmanAddons):\s?(?P<value>.*)$")
 _PLATFORM_KUBEVIRT: Final = "kubevirt"
 
@@ -289,7 +289,7 @@ def _mastertag_problems(values: Mapping[str, object]) -> list[str]:
     tag = values.get("mastertag")
     if tag is None or tag == "":
         return ["mastertag is required"]
-    if not isinstance(tag, str) or not _MASTERTAG.match(tag):
+    if not isinstance(tag, str) or not is_release_tag(tag):
         return [f"mastertag {tag!r} is not an OpenShift release like 4.18.22 or 4.18.22-x86_64"]
     return []
 
