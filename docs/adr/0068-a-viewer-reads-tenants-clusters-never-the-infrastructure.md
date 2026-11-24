@@ -22,7 +22,7 @@ than that": the list above was not complete.
 An audit of every route a non-admin may call (day1, day2, the SSE stream,
 the webhooks and health) and of every page a viewer reaches found the MCE in
 more places than ADR-0067 listed. The audit, route by route, is in the pull
-request that made this change, in its description. In short:
+request that made this change, #124, in its description. In short:
 
 - day1 answered `mce`, `path` (`sites/<site>/mces/<mce>/...`), `gitlab_url`
   and `mce_default_mastertag` on every cluster read, in the drift rows, a
