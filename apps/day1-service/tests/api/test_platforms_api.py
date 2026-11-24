@@ -23,7 +23,7 @@ from wingman_day1.integrations.segments_manager.infrastructure.fake import (
     default_segments_file,
     load_fake_ledger,
 )
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fake import (
     FakeServerInventory,
     default_fleet_file,
 )

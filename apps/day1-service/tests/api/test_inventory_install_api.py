@@ -31,7 +31,7 @@ from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
     load_inventory_demo,
 )
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fake import (
     FakeServerInventory,
     default_fleet_file,
 )

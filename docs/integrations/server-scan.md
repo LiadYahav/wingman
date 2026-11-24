@@ -43,7 +43,7 @@ server-scan adds is ignored until a feature needs it.
 
 | What | Where |
 |---|---|
-| day1's package | `apps/day1-service/src/wingman_day1/integrations/server_scan/`: `ports.py` (`ServerInventory`), `infrastructure/` (`adapter.py`, `parse.py`, `cached.py`, `fakes/inventory.py`), `compose.py` |
+| day1's package | `apps/day1-service/src/wingman_day1/integrations/server_scan/`: `ports.py` (`ServerInventory`), `infrastructure/` (`adapter.py`, `parse.py`, `cached.py`, `fake.py`), `compose.py` |
 | The domain types | `apps/day1-service/src/wingman_day1/domain/servers.py` (`ServerRow`, `ServerDetail`) |
 | day1's tests | `apps/day1-service/tests/integrations/server_scan/unit/infrastructure/` (`test_server_scan.py`, `test_server_scan_rows.py`) |
 | The fake fleet | `dev/fleet-fixtures/servers.yaml`, in server-scan's row shape, with `DAY1_FAKE_FLEET` |
@@ -64,7 +64,7 @@ docs/integrations/server-scan.yaml";
 2. **Domain and parsing**: `domain/servers.py` and `infrastructure/parse.py`
    for a new or changed field or value. A field an older server-scan does not
    send gets a default, so both still read.
-3. **The fake and its fixture**: `fakes/inventory.py` and
+3. **The fake and its fixture**: `infrastructure/fake.py` and
    `dev/fleet-fixtures/servers.yaml` keep server-scan's shape.
 4. **Tests**: day1's two test files above.
 5. **Bump `synced_at`** in the map, in the same PR, with an ADR-0038 note if
