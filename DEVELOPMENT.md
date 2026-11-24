@@ -147,7 +147,10 @@ Create always starts the provision-cluster workflow (ADR-0042). With the fake fl
 on an in-memory stand-in, with no setting to add. The fake run walks a few sample phases, about
 6 s each, and then waits at `awaiting-merge` with a merge request link to an example host;
 nothing is written to GitLab, so the new cluster never appears in the list. A file without a `mastertag` fails its run, and a second create
-of the same name while its run waits is refused (409), as the real workflow does.
+of the same name while its run waits is refused (409), as the real workflow does. **Create KV
+cluster** on Seeds & KV Clusters (ADR-0069) starts the same stand-in: on the fixtures' seed the
+draft is `ocp4-prod-kv-site1-az1-c`, from the fake hub's `r760-mtl-az1` (without the fake fleet,
+from the seed's KV cluster files), a copy of `ocp4-prod-kv-site1-az1-b`.
 
 Add `DAY1_UPGRADES=true` to see a cluster's **Upgrade** through the upgrade-cluster workflow
 (ADR-0055). The fake answers the targets from `dev/fleet-fixtures/upgrade.yaml`
