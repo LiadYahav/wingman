@@ -255,5 +255,6 @@ holds, and sends nothing a viewer's answer does not give it.
   Playwright spec `viewer-no-infrastructure.spec.ts`: the clusters list and a
   cluster's page as a viewer (no MCE, path, EPG, Segments Manager or GitLab
   link; no request that names an MCE, from an old link either; status by
-  name), the Documentation for a viewer and an admin, and signing out
-  emptying the stored reads.
+  name), a cluster's add-ons as a viewer (no MCE, Argo CD, id or folder
+  link; no `?mce=` sent, from an old link either), the Documentation for a
+  viewer and an admin, and signing out emptying the stored reads.

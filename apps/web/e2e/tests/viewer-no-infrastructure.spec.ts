@@ -3,13 +3,17 @@
  * mocked). day1 answers a viewer's cluster without its MCE, path or links; the
  * pages follow: no MCE, no file path, no EPG, no Segments Manager link, links
  * by name, and no request that names an MCE, even from an old link that does.
- * The Documentation leaves out the sections about the infrastructure, and the
- * query cache is one user's: signing out empties it.
+ * day2 answers a viewer's cluster by its name, without its MCE, Argo CD or
+ * folder link, and the add-ons page draws none. The Documentation leaves out
+ * the sections about the infrastructure, and the query cache is one user's:
+ * signing out empties it.
  */
 
 import { test, expect, type Page, type Request } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { anyQuery, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { destination, HOSTED_ID, HOSTED_NAME, hostedCharts, mockDay2World } from "../fixtures/day2";
 import type { ClusterDetail, ClusterLiveStatus, ClusterStatus } from "../../types";
+import type { DestinationCharts } from "../../types/day2";
 
 const LARK = "ocp4-prod-lark-site1";
 const MCE = "ocp4-prod-mce-site1-a";
@@ -147,4 +151,42 @@ test("signing out empties the stored reads: the cache is one user's", async ({ p
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.waitForURL("**/login");
   expect(await page.evaluate(() => localStorage.getItem("wingman-query-cache"))).toBeNull();
+});
+
+/** hawk's charts as day2 answers a viewer: its id is its name, and no MCE, Argo CD or folder link (ADR-0068). */
+function viewersCharts(): DestinationCharts {
+  const charts = hostedCharts();
+  const fromCluster = (path: string) => path.replace(/^sites\/[^/]+\/[^/]+\/mces\/[^/]+\//, "");
+  return {
+    ...charts,
+    id: HOSTED_NAME,
+    mce: null,
+    installed: charts.installed.map((c) => ({
+      ...c,
+      gitlab_url: null,
+      path: fromCluster(c.path),
+      override_path: fromCluster(c.override_path),
+      deploy: { ...c.deploy, argo: null },
+    })),
+  };
+}
+
+test("a viewer's cluster add-ons name no MCE, Argo CD, id or folder link, and send no MCE", async ({ page }) => {
+  await injectAdminAuth(page);
+  await injectViewerAuth(page);
+  await mockDashboardApis(page);
+  await mockDay2World(page);
+  const charts = viewersCharts();
+  await page.route(anyQuery(`/api/day2/clusters/${HOSTED_NAME}/addons`), (r) => json(r, charts));
+  await page.route(anyQuery(`/api/day2/clusters/${HOSTED_NAME}`), (r) =>
+    json(r, destination(HOSTED_ID, { id: HOSTED_NAME, mce: null, argo: null }))
+  );
+  const seen = requests(page);
+  // An old link that names the MCE: the page does not pass it on
+  await go(page, `/clusters/${HOSTED_NAME}/addons?mce=mce-a`);
+  const [first] = charts.installed;
+  await expect(page.getByTestId(`installed-${first.team}-${first.name}`)).toBeVisible();
+  await expect(page.getByText("mce-a")).toHaveCount(0);
+  await expect(page.getByTitle("Destination id")).toHaveCount(0);
+  expect(seen.urls.filter((u) => new URL(u).search.includes("mce"))).toEqual([]);
 });
