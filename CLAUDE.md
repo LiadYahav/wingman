@@ -237,6 +237,7 @@ and write yours here.
   cluster-name prefix in the web, a preview of an unsaved flavor.
 - Tuning: a lock per pool.
 - Code organisation, later (the user): 23 files left in the size baseline.
-- The team's questions: herzi, provision-cluster's 24 characters (now on
-  every create: Wingman allows 26, so a 25- or 26-character name gets the
-  orchestrator's 422), RBAC, a shared Git store.
+- The team's questions: herzi, RBAC, a shared Git store. Since 3.56.1 a
+  new cluster's name is at most provision-cluster's 24 characters after
+  `ocp4-` (ADR-0014's 2026-11-24 amendment); if production's HostedClusters
+  are `ocp4-<cn>`, the workflows team could raise it to 26.

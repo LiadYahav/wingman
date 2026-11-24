@@ -138,6 +138,9 @@ will do before it is pressed.
    can pass 24 (`prod-agent-standar-site1-a` is 26). Is 24 counted on the
    name without `ocp4-`, and should Wingman's suggestion and checks follow
    it in `workflow` mode? Until then, the workflow's 422 is shown as is.
+   *Answered 2026-11-24 (3.56.1): yes, on the name without `ocp4-`; Wingman
+   refuses a new name over 24 characters and cuts its suggestion to fit
+   (ADR-0014's 2026-11-24 amendment).*
 2. **The merge request is the workflow's, not Wingman's.** Its title and
    branch don't follow Wingman's MR conventions (ADR-0007), so Wingman's
    approvals page, the cluster list's pending rows, the name suggestion's

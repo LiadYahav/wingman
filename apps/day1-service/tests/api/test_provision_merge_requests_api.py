@@ -61,11 +61,11 @@ async def test_its_name_is_taken_and_a_second_create_is_refused_with_its_url(
     client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     # The flavor's first free name, before any MR (ADR-0040's suggestion)
-    await support.open_provision_mr(gitlab, "ocp4-prod-agent-standar-site1-a")
+    await support.open_provision_mr(gitlab, "ocp4-prod-agent-stand-site1-a")
     workflow = await support.open_provision_mr(gitlab, NEW)
     params = {"site": support.PROD_SITE, "mce": support.PROD_MCE, "flavor": "agent-standard"}
     suggested = await client.get(SUGGEST, params=params, headers=auth(support.VIEWER))
-    assert suggested.json()["name"] == "ocp4-prod-agent-standar-site1-b"
+    assert suggested.json()["name"] == "ocp4-prod-agent-stand-site1-b"
 
     again = await client.post(
         "/api/day1/clusters", json=support.create_body(NEW), headers=auth(support.ALICE)
