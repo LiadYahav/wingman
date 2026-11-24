@@ -83,7 +83,7 @@ export interface FlavorUpdate {
 export interface ClusterDrift {
   cluster: string;
   site: string;
-  mce: string;
+  mce: string | null;
   state: DriftState;
   /** `null` when unknown. */
   is_drifted: boolean | null;
@@ -103,7 +103,7 @@ export interface ClusterDrift {
 export interface DriftSummaryItem {
   name: string;
   site: string;
-  mce: string;
+  mce: string | null;
   state: DriftState;
   is_drifted: boolean | null;
   error: string | null;
@@ -117,7 +117,7 @@ export interface DriftSummaryItem {
 export interface SpecCluster {
   name: string;
   site: string;
-  mce: string;
+  mce: string | null;
   phase: string;
   state: DriftState;
   is_drifted: boolean | null;
@@ -131,7 +131,7 @@ export interface SpecCluster {
 export interface SpecDrift {
   cluster: string;
   site: string;
-  mce: string;
+  mce: string | null;
   state: DriftState;
   is_drifted: boolean | null;
   spec_version: string | null;

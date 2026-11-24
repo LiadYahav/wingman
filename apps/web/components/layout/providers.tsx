@@ -7,6 +7,8 @@ import { ThemeProvider } from "next-themes";
 import { useMemo, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
+import { QUERY_CACHE_KEY, forgetStoredQueries, sameUser } from "@/lib/query-cache";
+import { useAuthStore } from "@/stores/auth-store";
 
 /** Queries never restored from localStorage: what they show must be read now. */
 const NOT_PERSISTED = new Set(["approvals", "placement"]);
@@ -42,7 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const persister = createSyncStoragePersister({
       storage: window.localStorage,
-      key: "wingman-query-cache",
+      key: QUERY_CACHE_KEY,
     });
 
     persistQueryClient({
@@ -61,6 +63,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
       },
     });
   }, [queryClient]);
+
+  // The cache is one user's (lib/query-cache.ts): signing out or in as someone else empties it.
+  // The store's own hydration from storage is the same user coming back, not a change.
+  useEffect(
+    () =>
+      useAuthStore.subscribe((state, previous) => {
+        if (!useAuthStore.persist.hasHydrated() || sameUser(state.user, previous.user)) return;
+        queryClient.clear();
+        forgetStoredQueries();
+      }),
+    [queryClient]
+  );
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>

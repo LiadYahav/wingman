@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, Boxes, ChevronRight, GitBranch, RefreshCw, Shield } from "lucide-react";
 import { AddonsSection } from "./addons";
 import { ApprovalsSection } from "./approvals";
@@ -21,6 +21,8 @@ import { RolesSection } from "./roles";
 import { SpecialFeaturesSection } from "./special-features";
 import { TroubleshootingSection } from "./troubleshooting";
 import { WorkspacesSection } from "./workspaces";
+import { useMounted } from "@/hooks/use-mounted";
+import { useIsAdmin } from "@/stores/auth-store";
 
 // ── Low-level primitives ──────────────────────────────────────────────────────
 
@@ -40,34 +42,43 @@ function NavLink({ href, label, active }: { href: string; label: string; active?
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const NAV_SECTIONS = [
-  { id: "overview", label: "Platform Overview" },
-  { id: "concepts", label: "Core Concepts" },
-  { id: "roles", label: "Roles & Access" },
-  { id: "workspaces", label: "Workspaces" },
-  { id: "gitops", label: "GitOps Workflow" },
-  { id: "home", label: "The Overview Page" },
-  { id: "specs", label: "Flavors" },
-  { id: "clusters", label: "Clusters" },
-  { id: "cluster-workflows", label: "Cluster Workflows" },
-  { id: "inventory", label: "Inventory Management" },
-  { id: "addons", label: "Day2 Addons" },
-  { id: "drift", label: "Drift Detection" },
-  { id: "approvals", label: "Approvals" },
-  { id: "audit", label: "Audit Log" },
-  { id: "quick-links", label: "Quick Links" },
-  { id: "errors", label: "When a Change Is Refused" },
-  { id: "special-features", label: "Special Features" },
-  { id: "filelocations", label: "File Locations" },
-  { id: "troubleshooting", label: "Troubleshooting" },
-] as const;
+/**
+ * Every section, in order. `admin`: about the infrastructure (the workspaces,
+ * the server workflows, Inventory, Quick Links, the MCEs' upgrade rules, the
+ * repo's folders), so not a viewer's: a customer never learns of it (ADR-0068).
+ */
+const NAV_SECTIONS: { id: string; label: string; Section: () => React.ReactNode; admin?: true }[] = [
+  { id: "overview", label: "Platform Overview", Section: OverviewSection },
+  { id: "concepts", label: "Core Concepts", Section: ConceptsSection },
+  { id: "roles", label: "Roles & Access", Section: RolesSection },
+  { id: "workspaces", label: "Workspaces", Section: WorkspacesSection, admin: true },
+  { id: "gitops", label: "GitOps Workflow", Section: GitOpsSection },
+  { id: "home", label: "The Overview Page", Section: HomeSection },
+  { id: "specs", label: "Flavors", Section: FlavorsSection },
+  { id: "clusters", label: "Clusters", Section: ClustersSection },
+  { id: "cluster-workflows", label: "Cluster Workflows", Section: ClusterWorkflowsSection, admin: true },
+  { id: "inventory", label: "Inventory Management", Section: InventorySection, admin: true },
+  { id: "addons", label: "Day2 Addons", Section: AddonsSection },
+  { id: "drift", label: "Drift Detection", Section: DriftSection },
+  { id: "approvals", label: "Approvals", Section: ApprovalsSection },
+  { id: "audit", label: "Audit Log", Section: AuditSection },
+  { id: "quick-links", label: "Quick Links", Section: QuickLinksSection, admin: true },
+  { id: "errors", label: "When a Change Is Refused", Section: RefusalsSection },
+  { id: "special-features", label: "Special Features", Section: SpecialFeaturesSection, admin: true },
+  { id: "filelocations", label: "File Locations", Section: FileLocationsSection, admin: true },
+  { id: "troubleshooting", label: "Troubleshooting", Section: TroubleshootingSection },
+];
 
 /** The nav, the hero and the sections in order; each section is a file beside this one. */
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>("overview");
+  // The role is known once mounted (the persisted auth store): until then the sections everyone reads
+  const mounted = useMounted();
+  const isAdmin = useIsAdmin() && mounted;
+  const sections = useMemo(() => NAV_SECTIONS.filter((s) => isAdmin || !s.admin), [isAdmin]);
 
   useEffect(() => {
-    const observers = NAV_SECTIONS.map(({ id }) => {
+    const observers = sections.map(({ id }) => {
       const el = document.getElementById(id);
       if (!el) return null;
       const obs = new IntersectionObserver(
@@ -78,7 +89,7 @@ export default function DocsPage() {
       return obs;
     });
     return () => observers.forEach((obs) => obs?.disconnect());
-  }, []);
+  }, [sections]);
 
   return (
     <div className="flex gap-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -89,7 +100,7 @@ export default function DocsPage() {
           <div className="rounded-xl border bg-card p-3 shadow-sm max-h-[calc(100vh-3rem)] overflow-y-auto">
             <p className="px-2 mb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contents</p>
             <nav aria-label="Contents" className="space-y-0.5">
-              {NAV_SECTIONS.map(({ id, label }) => (
+              {sections.map(({ id, label }) => (
                 <NavLink key={id} href={`#${id}`} label={label} active={activeSection === id} />
               ))}
             </nav>
@@ -131,25 +142,7 @@ export default function DocsPage() {
           </div>
         </div>
 
-        <OverviewSection />
-        <ConceptsSection />
-        <RolesSection />
-        <WorkspacesSection />
-        <GitOpsSection />
-        <HomeSection />
-        <FlavorsSection />
-        <ClustersSection />
-        <ClusterWorkflowsSection />
-        <InventorySection />
-        <AddonsSection />
-        <DriftSection />
-        <ApprovalsSection />
-        <AuditSection />
-        <QuickLinksSection />
-        <RefusalsSection />
-        <SpecialFeaturesSection />
-        <FileLocationsSection />
-        <TroubleshootingSection />
+        {sections.map(({ id, Section }) => <Section key={id} />)}
 
       </div>
     </div>

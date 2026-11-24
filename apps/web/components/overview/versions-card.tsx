@@ -49,7 +49,7 @@ function UpgradeCounts({ clusters }: { clusters: ClusterStatus[] }) {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4" data-testid="overview-upgrades">
       <Link href={upgradesHref("available")} data-testid="overview-upgrade-available"
-        title="Clusters whose MCE offers a newer OpenShift release than their mastertag"
+        title="Clusters offered a newer OpenShift release than their mastertag"
         className={cn(PILL, "bg-primary/8 text-primary hover:bg-primary/15")}>
         <CircleArrowUp aria-hidden className="h-3.5 w-3.5" />
         <span><span className="tabular-nums">{summary.available}</span> {summary.available === 1 ? "upgrade" : "upgrades"} available</span>
@@ -93,7 +93,7 @@ export function VersionsCard() {
   return (
     <OverviewCard
       title="OpenShift Versions"
-      hint="Clusters per mastertag, the OpenShift release each cluster file asks for, newest first; each bar is that version's share of all clusters. With upgrades on, how many clusters' MCE offers a newer release, and how many have an upgrade run open."
+      hint="Clusters per mastertag, the OpenShift release each cluster file asks for, newest first; each bar is that version's share of all clusters. With upgrades on, how many clusters are offered a newer release, and how many have an upgrade run open."
       href="/clusters"
       data-testid="overview-versions"
     >

@@ -30,8 +30,8 @@ export type RolloutState =
 export interface RolloutCluster {
   name: string;
   site: string;
-  mce: string;
-  path: string;
+  mce: string | null;
+  path: string | null;
   /** The version its header names now. */
   from_version: string | null;
   state: RolloutState;
@@ -74,7 +74,7 @@ export interface RolloutStatus {
 export interface RolloutClusterRef {
   name: string;
   site: string;
-  mce: string;
+  mce: string | null;
 }
 
 /** A nodepool whose nodes roll when the cluster's MR merges. */

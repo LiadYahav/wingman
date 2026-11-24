@@ -21,7 +21,7 @@ import { FlavorStateBadge, FlavorStateLegend } from "@/components/clusters/drift
 import { FlavorInputsCard, WarningPanel } from "@/components/specs/flavor-inputs";
 import { ImportClustersSheet } from "@/components/specs/import-clusters/import-sheet";
 import { RolloutPanel } from "@/components/specs/rollout-panel";
-import { clusterHref } from "@/lib/clusters";
+import { clusterHref, placeOf } from "@/lib/clusters";
 import { DISPLAY_ORDER, flavorDisplayState } from "@/lib/flavor-state";
 import { rolloutSummary, useRollout } from "@/lib/rollout";
 import { toastMrOpened } from "@/lib/mr-toast";
@@ -397,7 +397,7 @@ export default function SpecDetailPage() {
                           <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground break-all">{c.site} / {c.mce}</td>
+                      <td className="px-4 py-3 text-muted-foreground break-all">{placeOf(c)}</td>
                       <td className="px-4 py-3">
                         <FlavorStateBadge row={c} />
                       </td>
@@ -498,7 +498,7 @@ export default function SpecDetailPage() {
                           {r.cluster}
                         </Link>
                         <p className="text-xs text-muted-foreground mt-0.5 break-all">
-                          {r.site} / {r.mce}
+                          {placeOf(r)}
                           {r.spec_version && <> · compared with v{r.spec_version}, the version it is on</>}
                         </p>
                         {r.state === "unknown" && r.error && (

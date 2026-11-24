@@ -112,7 +112,7 @@ export function ClusterHeader({ name, mce, loading = false, cluster, drift, isAd
               <ExternalLink className="h-4 w-4 mr-1.5" />GitLab
             </a>
           )}
-          <Link href={chartsHref(name, mce ?? cluster.mce)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Link href={chartsHref(name, mce ?? cluster.mce ?? undefined)} className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Package className="h-4 w-4 mr-1.5" />Addons
           </Link>
           {isAdmin && actions && <AdminButtons actions={actions} />}

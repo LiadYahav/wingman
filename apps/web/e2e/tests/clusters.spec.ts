@@ -233,7 +233,7 @@ test.describe("Cluster detail", () => {
     await expect(page.getByText("1 / 2 / 3")).toBeVisible();
     // vlanId and dhcp_values are written by the provision-cluster workflow, never by Wingman
     await expect(page.getByText("pending")).toHaveCount(2);
-    await expect(page.getByText(DETAIL.path)).toBeVisible();
+    await expect(page.getByText(DETAIL.path ?? "")).toBeVisible();
     await expect(page.getByText("cluster-roles")).toBeVisible();
   });
 

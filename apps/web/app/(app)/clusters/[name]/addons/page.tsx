@@ -16,6 +16,7 @@ import {
   problemOf,
   teamAccess,
 } from "@/lib/day2";
+import { clusterHref } from "@/lib/clusters";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -138,8 +139,9 @@ function ClusterCharts() {
   const params = useParams<{ name: string }>();
   const searchParams = useSearchParams();
   const key = keyFromParam(params.name);
-  const mce = searchParams.get("mce") ?? undefined;
   const isAdmin = useIsAdmin();
+  // An admin's link may narrow a bare name by its MCE; a viewer's page never sends one (ADR-0068)
+  const mce = (isAdmin && searchParams.get("mce")) || undefined;
   // The cache providers.tsx restores can land before this Suspense boundary hydrates: until mounted,
   // the reads are drawn as the server drew them (nothing read yet), so the first render is the server's.
   const mounted = useMounted();
@@ -204,7 +206,7 @@ function ClusterCharts() {
   const home = homeOf(data?.kind ?? dest?.kind, key);
   const backHref =
     data?.kind === "hosted" && dest?.in_day1 !== false
-      ? `/clusters/${encodeURIComponent(data.cluster)}?site=${encodeURIComponent(data.site)}&mce=${encodeURIComponent(data.mce)}`
+      ? clusterHref({ name: data.cluster, site: data.site, mce: data.mce })
       : home.href;
 
   function showOpened(changes: OpenedChanges) {

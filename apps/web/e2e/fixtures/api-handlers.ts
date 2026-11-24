@@ -510,6 +510,14 @@ export function held() {
   };
 }
 
+/**
+ * A cluster read with or without its query: an admin's page sends the link's
+ * `?site=&mce=`, a viewer's sends none (ADR-0068), so a mock answers both.
+ */
+export function anyQuery(path: string): RegExp {
+  return new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\?.*)?$`);
+}
+
 /** Land on "/" first so the persisted session hydrates (see injectAdminAuth), then open `path`. */
 export async function go(page: Page, path: string) {
   await page.goto("/");

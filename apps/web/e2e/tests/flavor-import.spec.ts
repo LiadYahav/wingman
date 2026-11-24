@@ -130,7 +130,7 @@ const OWNER_DRIFT: ValueDrift = {
 function candidate(name: string, overrides: Partial<ImportCandidate>): ImportCandidate {
   const c = byName(name);
   return {
-    name: c.name, site: c.site, mce: c.mce, path: c.path,
+    name: c.name, site: c.site, mce: c.mce ?? "", path: c.path ?? "",
     last_commit_id: `${name.length.toString(16).padStart(2, "0")}c904bfafde4c4ed24416190ea224ee25cdcf7`,
     status: "ready", linked_spec: null, problems: [], drift: drift(name), ...overrides,
   };
@@ -173,7 +173,7 @@ const PREVIEW: ImportPreview = {
 function opened(name: string, iid: number): ImportedCluster {
   const c = byName(name);
   return {
-    name: c.name, site: c.site, mce: c.mce, path: c.path,
+    name: c.name, site: c.site, mce: c.mce ?? "", path: c.path ?? "",
     merge_request: mockMR({
       iid,
       title: `[Wingman/Day1] Import cluster ${name} into spec ${FLAVOR} v1.0.0`,
@@ -186,7 +186,7 @@ function opened(name: string, iid: number): ImportedCluster {
 
 function notOpened(name: string, code: ImportFailure["code"], detail: string): ImportFailure {
   const c = byName(name);
-  return { name: c.name, site: c.site, mce: c.mce, path: c.path, code, detail };
+  return { name: c.name, site: c.site, mce: c.mce ?? "", path: c.path ?? "", code, detail };
 }
 
 const FOLLOWERS: SpecCluster[] = [

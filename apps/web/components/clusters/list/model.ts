@@ -51,17 +51,17 @@ export function compareOwner(a: string, b: string): number {
 export function compareBy(field: SortField, a: ClusterStatus, b: ClusterStatus): number {
   switch (field) {
     case "name": return a.name.localeCompare(b.name);
-    case "site": return `${a.site}/${a.mce}`.localeCompare(`${b.site}/${b.mce}`);
+    case "site": return `${a.site}/${a.mce ?? ""}`.localeCompare(`${b.site}/${b.mce ?? ""}`);
     case "spec": return (a.spec_name ?? "").localeCompare(b.spec_name ?? "");
     case "mastertag": return (a.mastertag ?? "").localeCompare(b.mastertag ?? "", undefined, { numeric: true });
     case "created_at": return (a.created_at ?? "").localeCompare(b.created_at ?? "");
   }
 }
 
-/** Whether a lowercased search finds the cluster: in its name, site, MCE, flavor, mastertag or owner numbers. */
+/** Whether a lowercased search finds the cluster: in its name, site, MCE (an admin's), flavor, mastertag or owner numbers. */
 export function matchesSearch(c: ClusterStatus, q: string): boolean {
   return (
-    [c.name, c.site, c.mce, c.spec_name ?? "", c.mastertag ?? ""].some((text) => text.toLowerCase().includes(q)) ||
+    [c.name, c.site, c.mce ?? "", c.spec_name ?? "", c.mastertag ?? ""].some((text) => text.toLowerCase().includes(q)) ||
     OWNER_KEYS.some((k) => ownerOf(c, k).includes(q))
   );
 }

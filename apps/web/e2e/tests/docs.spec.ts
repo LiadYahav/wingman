@@ -15,6 +15,8 @@ test.describe("The Documentation page", () => {
     await mockDashboardApis(page);
     await go(page, "/docs");
     await expect(page.getByRole("heading", { name: "Wingman Platform", level: 1 })).toBeVisible();
+    // An admin's sections appear once the role is known (ADR-0068: a viewer's leave them out)
+    await expect(contentsNav(page).getByRole("link", { name: "Inventory Management" })).toBeVisible();
 
     const contents = await contentsNav(page).getByRole("link").evaluateAll((links) => links.map((a) => a.getAttribute("href") ?? ""));
     expect(contents).toEqual(expect.arrayContaining(["#home", "#cluster-workflows", "#inventory", "#quick-links"]));

@@ -27,7 +27,7 @@ import type { Service } from "./approvals";
 const clusters = {
   all: ["clusters"] as const,
   driftSummary: ["clusters", "drift-summary"] as const,
-  bulkStatus: (input: { name: string; mce: string }[]) => ["clusters", "bulk-status", input] as const,
+  bulkStatus: (input: { name: string; mce?: string }[]) => ["clusters", "bulk-status", input] as const,
   /** Every cluster's newest upgrade run: under `clusters.all`, so the list's Refresh reads it too. */
   upgrades: ["clusters", "upgrades"] as const,
   one: (name: string) => ["clusters", name] as const,

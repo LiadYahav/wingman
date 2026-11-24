@@ -54,11 +54,11 @@ function HealthBody() {
       <EmptyState
         icon={Activity}
         title="Live status is off"
-        description="This deployment does not read HostedClusters from the MCE hubs (CLUSTER_STATUS_ENABLED)."
+        description="This deployment does not read the clusters' live status (CLUSTER_STATUS_ENABLED)."
       />
     );
   }
-  if (status.error) return <ProblemList error={status.error} title="Live status could not be read from the MCE hubs" />;
+  if (status.error) return <ProblemList error={status.error} title="Live status could not be read" />;
   return <HealthRows health={health} />;
 }
 

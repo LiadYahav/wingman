@@ -31,7 +31,7 @@ export interface ScaleNodePool {
 /** `GET /clusters/{name}/scale`: what Scale can change on this cluster, from its day1 file and flavor. */
 export interface ScaleOptions {
   cluster: string;
-  mce: string;
+  mce: string | null;
   flavor: string | null;
   nodepools: ScaleNodePool[];
 }

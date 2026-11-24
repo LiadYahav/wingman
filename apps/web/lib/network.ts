@@ -10,11 +10,16 @@ import { useQuery } from "@tanstack/react-query";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { ClusterNetworkRead } from "@/types";
 
-/** `GET /clusters/{name}/network{where}`, read with the page: the detail does not wait on it. */
-export function useClusterNetwork(name: string, where: string) {
+/**
+ * `GET /clusters/{name}/network{where}`, read with the page: the detail does
+ * not wait on it. An admin's (`enabled`): a viewer's network is the file's,
+ * which the detail already has (ADR-0068).
+ */
+export function useClusterNetwork(name: string, where: string, enabled = true) {
   return useQuery<ClusterNetworkRead>({
     queryKey: day1Keys.clusters.network(name),
     queryFn: () => day1Api.clusters.network(name, where),
+    enabled,
     staleTime: 60_000,
     retry: false,
   });

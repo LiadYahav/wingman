@@ -32,7 +32,8 @@ export interface SiteCount {
 /** The clusters by site and MCE folder, the most first (a tie by name). */
 export function clustersBySite(clusters: readonly Pick<ClusterStatus, "site" | "mce">[]): SiteCount[] {
   const sites = new Map<string, Map<string, number>>();
-  for (const { site, mce } of clusters) {
+  // An admin's card (Infrastructure's Overview): every cluster has its MCE
+  for (const { site, mce = "" } of clusters.map((c) => ({ site: c.site, mce: c.mce ?? "" }))) {
     const mces = sites.get(site) ?? new Map<string, number>();
     mces.set(mce, (mces.get(mce) ?? 0) + 1);
     sites.set(site, mces);

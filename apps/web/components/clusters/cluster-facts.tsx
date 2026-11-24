@@ -10,6 +10,7 @@ import { ClusterSegmentsLink } from "@/components/clusters/segments-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClusterNetwork } from "@/lib/network";
 import { useClusterNodes } from "@/lib/nodes";
+import { useIsAdmin } from "@/stores/auth-store";
 import { showTuning as tuningText, tuningNames } from "@/lib/tuning-profiles";
 import { cn, formatDate } from "@/lib/utils";
 import type { ClusterDetail, ClusterNetworkRead, ClusterValues, NodePoolNodes } from "@/types";
@@ -50,8 +51,8 @@ export function ClusterInfoCard({ cluster, mastertagAction }: { cluster: Cluster
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <Row label="Site">{cluster.site}</Row>
-        {/* A KV cluster's folder is a seed (ADR-0067) */}
-        <Row label={cluster.kind === "kv" ? "Seed" : "MCE"}>{cluster.mce}</Row>
+        {/* A KV cluster's folder is a seed (ADR-0067); a viewer's cluster has no MCE (ADR-0068) */}
+        {cluster.mce && <Row label={cluster.kind === "kv" ? "Seed" : "MCE"}>{cluster.mce}</Row>}
         <Row label="Mastertag">
           {mastertag ? (
             <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
@@ -71,7 +72,7 @@ export function ClusterInfoCard({ cluster, mastertagAction }: { cluster: Cluster
             <span className="text-muted-foreground font-normal"> · {formatDate(cluster.metadata.created_at)}</span>
           )}
         </Row>
-        <div className="pt-1 border-t border-border/50">
+        {cluster.path && <div className="pt-1 border-t border-border/50">
           <p className="text-xs text-muted-foreground mb-0.5">File</p>
           {cluster.gitlab_url ? (
             <a
@@ -86,7 +87,7 @@ export function ClusterInfoCard({ cluster, mastertagAction }: { cluster: Cluster
           ) : (
             <p className="font-mono text-xs break-all">{cluster.path}</p>
           )}
-        </div>
+        </div>}
       </CardContent>
     </Card>
   );
@@ -113,10 +114,16 @@ function EpgValue({ read, isPending, error }: { read: ClusterNetworkRead | undef
   return <span data-testid="network-epg" className="font-mono text-xs">{read.epg}</span>;
 }
 
+/**
+ * The HostedCluster the chart renders and the file's network. The EPG, what
+ * segments-manager says that disagrees and its link are an admin's: a
+ * viewer's network is the file's VLAN and segment (ADR-0068).
+ */
 export function HostedClusterCard({ cluster, where }: { cluster: ClusterDetail; where: string }) {
+  const isAdmin = useIsAdmin();
   const network = cluster.values?.network;
   const vlan = network?.vlan_id;
-  const net = useClusterNetwork(cluster.name, where);
+  const net = useClusterNetwork(cluster.name, where, isAdmin);
   const problems = net.data?.problems ?? [];
   return (
     <Card>
@@ -141,9 +148,11 @@ export function HostedClusterCard({ cluster, where }: { cluster: ClusterDetail; 
                   ? <span className="font-mono text-xs" title="Not a /24 network address">{network.dhcp_network}</span>
                   : <Pending what="The provision-cluster workflow writes dhcp_values when it pushes the new file" />}
             </Row>
-            <Row label="EPG">
-              <EpgValue read={net.data} isPending={net.isPending} error={net.error} />
-            </Row>
+            {isAdmin && (
+              <Row label="EPG">
+                <EpgValue read={net.data} isPending={net.isPending} error={net.error} />
+              </Row>
+            )}
             {problems.length > 0 && (
               <ul data-testid="network-problems" className="space-y-1 rounded-md bg-status-warning/10 px-2.5 py-1.5 text-xs text-status-warning-fg">
                 {problems.map((p) => (

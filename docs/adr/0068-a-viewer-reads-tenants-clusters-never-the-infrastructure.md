@@ -114,6 +114,35 @@ a world with every feature on and a merge request of each kind open, and
 fails on any MCE's, seed's or KV cluster's name or `mces/<folder>` path; a new
 viewer route must join its list, or its coverage test fails.
 
+### 5. The web follows
+
+The web hides nothing the services send: it draws what a viewer's answer
+holds, and sends nothing a viewer's answer does not give it.
+
+- **Links and reads carry no MCE for a viewer.** `clusterHref` and
+  `clusterQuery` (`lib/clusters.ts`) pin a cluster by `?site=&mce=` only when
+  it has an MCE, so a viewer's links are `/clusters/<name>`; the cluster page
+  sends a link's `?site=&mce=` for an admin only, so a viewer's old bookmark
+  sends neither; live status, its stream and the bulk status go by name
+  (`useClusterLiveStatus(name, mce, found)`, `BulkStatusItem`); day2's reads
+  get no `?mce=` when the cluster has none.
+- **What is `null` is not drawn**: the cluster card's MCE, MCE default and
+  File rows, the header's GitLab button, the list's MCE line, the upgrade
+  panel's MCE; where a list says where a cluster is, `placeOf` is the site
+  alone. The network card's EPG, its problems and its read are an admin's
+  (`useClusterNetwork(..., enabled)`): a viewer's card is the file's VLAN
+  and segment. The Dashboard's words name no MCE ("Live status could not be
+  read", "offered a newer OpenShift release").
+- **The Documentation** leaves out, for a viewer, the sections about the
+  infrastructure (Workspaces, Cluster Workflows, Inventory Management, Quick
+  Links, Special Features, File Locations), and its Core Concepts explains a
+  cluster by its name and site, without the MCE and the destinations.
+- **The query cache is one user's** (`lib/query-cache.ts`): it lives in
+  localStorage for ten minutes, and an admin's reads hold the MCEs, the KV
+  clusters and Inventory. Signing out, a sign-in as someone else or in
+  another role, and an expired session (the 401) empty it, in memory and in
+  storage; the store's own hydration is the same user coming back.
+
 ## Alternatives rejected
 
 - **Hide them in the web only**: a viewer's token reads the API (ADR-0067).
@@ -146,6 +175,10 @@ viewer route must join its list, or its coverage test fails.
   cluster that follows the flavor; no list names one.
 - A merge request or commit text that names an MCE Wingman's tree does not
   hold (a deleted one) is not redacted.
+- The Documentation's general sections (the platform overview, clusters,
+  add-ons, roles, troubleshooting) still say what an MCE or the hub is, as
+  the public repo's docs do; they name no deployment's MCE. The sections
+  about the infrastructure are an admin's.
 
 ## Verification
 
@@ -162,3 +195,10 @@ viewer route must join its list, or its coverage test fails.
   request about no cluster, the commits and a commit's diff, the status by
   name; `test_status_api.py` (a viewer's stream by name, the hub's words
   hidden) and `test_upgrades_api.py` (a viewer's run without its MCE).
+- `apps/web/lib/clusters.test.ts` (a viewer's link and reads by name,
+  `placeOf`) and `lib/query-cache.test.ts` (the cache is one user's); the
+  Playwright spec `viewer-no-infrastructure.spec.ts`: the clusters list and a
+  cluster's page as a viewer (no MCE, path, EPG, Segments Manager or GitLab
+  link; no request that names an MCE, from an old link either; status by
+  name), the Documentation for a viewer and an admin, and signing out
+  emptying the stored reads.
