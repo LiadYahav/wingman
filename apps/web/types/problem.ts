@@ -2,7 +2,9 @@
 //
 // Both services answer every error with `application/problem+json`. `code` is
 // the stable member to match on; `title` and `detail` are for people and may
-// change wording. The codes are append-only (wingman_core.web.errors).
+// change wording. The codes are append-only (wingman_core.web.errors): one
+// goes only with the last route that answered it (ADR-0004's 2026-11-24
+// amendment).
 
 export type ErrorCode =
   | "VALIDATION_ERROR"

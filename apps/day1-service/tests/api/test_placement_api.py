@@ -32,7 +32,7 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FREE_AGENT, FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
 from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
+from wingman_day1.integrations.server_scan.infrastructure.fake import FakeServerInventory
 
 Auth = Callable[[User], dict[str, str]]
 

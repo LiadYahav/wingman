@@ -5,9 +5,9 @@ ADR-0042, ADR-0055) and server-scan, real or none; or, with ``DAY1_FAKE_FLEET``
 (development only), their fakes from ``dev/fleet-fixtures``. Provision is
 never none: without the orchestrator (development and tests only, which
 ``check_runtime`` enforces) the in-memory provision-cluster stands in. server-scan's
-HTTP adapter is built by its integration's ``compose``, its fake by the
-integration's ``infrastructure/fakes/fleet.py``; segments-manager's adapter is
-its integration's ``compose`` too.
+HTTP adapter is built by its integration's ``compose``, its fake is the
+integration's ``infrastructure/fake.py`` seeded by ``infrastructure/fake_fleet.py``;
+segments-manager's adapter is its integration's ``compose`` too.
 ``main.build_adapters`` calls these; nothing else does.
 """
 
@@ -77,7 +77,7 @@ def fleet_adapters(
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow, load_fleet
         from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-        from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+        from wingman_day1.integrations.server_scan.infrastructure.fake import (
             FakeServerInventory,
             default_fleet_file,
         )

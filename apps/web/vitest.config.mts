@@ -1,8 +1,8 @@
 /**
- * Vitest: unit tests for the web's pure logic (filters, sorting, URL state,
- * CSV), next to the code as `*.test.ts`. Node only, no DOM: what a page shows
- * is Playwright's (e2e/). Never part of the Next build: nothing the app
- * imports reaches a test file.
+ * Vitest: unit tests for the web's pure logic (the models behind a page, a
+ * form or a dialog, and the query keys), next to the code as `*.test.ts`.
+ * Node only, no DOM: what a page shows is Playwright's (e2e/). Never part of
+ * the Next build: nothing the app imports reaches a test file.
  */
 
 import { fileURLToPath } from "node:url";

@@ -68,9 +68,9 @@ wingman/
 │   │   │                          #   the Overview (page.tsx, at /), clusters, specs, addons,
 │   │   │                          #   lints, inventory, quick-links, approvals, audit, docs,
 │   │   │                          #   settings
-│   │   ├── components/            # ui, common, layout, data-table, and one folder per area:
-│   │   │                          #   overview, clusters, specs, addons, machine-configs, tuning,
-│   │   │                          #   inventory, quick-links
+│   │   ├── components/            # ui, common, layout, and one folder per area: overview,
+│   │   │                          #   clusters, specs, addons, machine-configs, tuning,
+│   │   │                          #   image-mirrors, infrastructure, inventory, quick-links
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
 │   │   ├── types/                 # day1/, day2/, one file per area, problem.ts (index.ts re-exports them)
 │   │   └── e2e/                   # Playwright: the mocked and live projects
@@ -284,7 +284,7 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day1/platforms` | The systems the Infrastructure sidebar links out to (ADR-0066, ADR-0067): `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the top bar opens in a new tab. Read from the settings: nothing is called |
+| `GET` | `/api/day1/platforms` | The systems the Infrastructure sidebar links out to (ADR-0066, ADR-0067): `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the sidebar opens in a new tab under `name`. Read from the settings: nothing is called |
 
 #### Inventory Management (admins only, ADR-0057 and ADR-0067)
 

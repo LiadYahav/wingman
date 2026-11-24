@@ -5,7 +5,8 @@ Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live statu
 2026-11-16 (3.38.0: Ready and Needs fix, a pool's total, collapsing an MCE, installing a
 server with its health checks waived); amended 2026-11-23 (3.54.0: a pool's servers are named by
 its InfraEnv's agentLabels); amended 2026-11-23 (3.55.0: herzi's used Agents apart, and the
-NodePools that do not exclude its label); amended by ADR-0067 (2026-11-23: admins only, in the Infrastructure workspace)
+NodePools that do not exclude its label); amended by ADR-0067 (2026-11-23: admins only, in the Infrastructure workspace);
+amended 2026-11-24 (no Server Scan area: Inventory names servers as text, ADR-0066)
 
 ## Context
 
@@ -504,3 +505,21 @@ the MCEs, which a viewer never knows of.
 
 Verification: `apps/day1-service/tests/api/test_inventory_api.py`
 (`test_only_admins_read_and_add`).
+
+## Amendment (2026-11-24): no Server Scan area; Inventory names servers as text
+
+"The future Server Scan area" and "the server's page in the Server Scan area"
+above were written while that area was planned. It was built (ADR-0048) and
+removed in 3.52.1 (ADR-0066): the team keeps server-scan apart from Wingman.
+
+- **Inventory names a server as text**, in a pool's servers and in the runs:
+  no link to a page of its own, and the runs carry no `server_id` for one
+  (ADR-0066). A server's full record is server-scan's own UI, which the
+  Infrastructure sidebar links to (ADR-0067).
+- Nothing else here changes: Inventory still reads server-scan through the one
+  `ServerInventory` port, adapter and cache.
+
+Verification: `apps/day1-service/tests/api/test_inventory_api.py`
+(`test_runs_are_listed_from_the_orchestrator_alone`: a run names its server
+and carries no `server_id`) and `apps/web/e2e/tests/platforms-apart.spec.ts`
+(nothing in Wingman leads to a page of its own for server-scan).

@@ -11,14 +11,17 @@ Families:
 - ``<repo>:project``                       the project and its default branch
 - ``<repo>:files:...``                     trees, files, history at the default branch
 - ``<repo>:commit:<sha>``                  one commit (immutable)
+- ``<repo>:commit-diff:<sha>``             one commit's diff (immutable)
 - ``<repo>:mrs:...``                       merge-request lists, and one MR's diff at a head
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
 - ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
-- ``segments-manager:segments:...``        its segments for one query
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 - ``workflows:add-server:...``             the orchestrator's add-server runs: the list, one run
+- ``workflows:upgrade:...``                the orchestrator's upgrade runs: the list, one run
+
+Scale's update-nodepool runs are not cached: each read asks the orchestrator.
 """
 
 from __future__ import annotations

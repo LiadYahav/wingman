@@ -1,4 +1,4 @@
-"""The top bar's systems, as the web reads them (ADR-0066)."""
+"""The Infrastructure sidebar's systems, as the web reads them (ADR-0066, ADR-0067)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from wingman_day1.domain.platforms import Platform, PlatformId
 
 
 class PlatformOut(BaseModel):
-    """One system: its own UI, which the top bar opens in a new tab."""
+    """One system: its name (the link's label) and its own UI, opened in a new tab."""
 
     id: PlatformId
     name: str
@@ -23,7 +23,7 @@ class PlatformOut(BaseModel):
 
 
 class PlatformsOut(BaseModel):
-    """The configured systems whose UI day1 knows, in the top bar's order; none: ``[]``."""
+    """The configured systems whose UI day1 knows, in the sidebar's order; none: ``[]``."""
 
     platforms: list[PlatformOut]
 

@@ -31,8 +31,6 @@ def segment_record(raw: JSON) -> SegmentRecord:
         status=optional_text(raw, "status"),
         type=optional_text(raw, "type"),
         site=optional_text(raw, "site"),
-        dhcp=_flag(raw, "dhcp"),
-        allocated_at=optional_text(raw, "allocated_at"),
     )
 
 
@@ -43,13 +41,6 @@ def _number(raw: Mapping[str, JSON], key: str) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"{key} is not a number")
     return value
-
-
-def _flag(raw: Mapping[str, JSON], key: str) -> bool | None:
-    value = raw.get(key)
-    if value is None or isinstance(value, bool):
-        return value
-    raise TypeError(f"{key} is not true or false")
 
 
 def _holder(raw: Mapping[str, JSON]) -> str | tuple[str, ...] | None:

@@ -55,7 +55,7 @@ from wingman_day1.domain.inventory import (
 )
 from wingman_day1.domain.mce_capacity import SPARE_STATE
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
+from wingman_day1.integrations.server_scan.infrastructure.fake import FakeServerInventory
 
 AgentLabels = Mapping[str, Mapping[str, Mapping[str, str]]]
 """Per MCE, the agentLabels of its InfraEnvs by name."""

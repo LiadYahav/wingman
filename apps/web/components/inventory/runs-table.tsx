@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "@/components/data-table/data-table";
-import { useDataTable } from "@/components/data-table/use-data-table";
 import { EmptyState } from "@/components/common/empty-state";
 import { Hint } from "@/components/common/hint";
 import { originHint, originLabel, readablePhase, runSubject, runTone, startedAgo, type RunTone } from "@/lib/inventory/runs";
@@ -66,61 +63,89 @@ function Status({ run }: { run: InventoryRun }) {
   );
 }
 
+/**
+ * The lines between rows, and the firmer one under the header, from the
+ * foreground so they show in both themes (1.4-1.5:1 and 1.5-1.8:1, about
+ * Apple's separators; the theme's `border` at 60% was 1.15:1), and 3:1 or
+ * more when the system asks for more contrast.
+ */
+const DIVIDER = {
+  rows: "divide-foreground/15 contrast-more:divide-foreground/50",
+  header: "border-foreground/20 contrast-more:border-foreground/55",
+};
 
-const column = createColumnHelper<InventoryRun>();
+const HEADERS = ["Started", "Who", "Pool", "Server", "Status", "Error"] as const;
 
-function runColumns(now: number): ColumnDef<InventoryRun, never>[] {
-  return [
-    column.display({ id: "started", header: "Started", cell: (c) => <Started run={c.row.original} now={now} /> }),
-    column.display({ id: "origin", header: "Who", cell: (c) => <Origin run={c.row.original} /> }),
-    column.display({
-      id: "pool",
-      header: "Pool",
-      cell: (c) => (
+function RunRow({ run, now }: { run: InventoryRun; now: number }) {
+  return (
+    <tr data-testid="run-row" data-workflow={run.workflow_id} className="transition-colors hover:bg-muted/40">
+      <td className="px-3 py-1.5 align-middle">
+        <Started run={run} now={now} />
+      </td>
+      <td className="px-3 py-1.5 align-middle">
+        <Origin run={run} />
+      </td>
+      <td className="px-3 py-1.5 align-middle">
         <span className="block min-w-0">
-          <span className="block font-mono text-xs">{c.row.original.infra_env ?? "—"}</span>
-          <span className="block font-mono text-[11px] text-muted-foreground">{c.row.original.mce ?? c.row.original.workflow_id}</span>
+          <span className="block font-mono text-xs">{run.infra_env ?? "—"}</span>
+          <span className="block font-mono text-[11px] text-muted-foreground">{run.mce ?? run.workflow_id}</span>
         </span>
-      ),
-    }),
-    column.display({
-      id: "server",
-      header: "Server",
-      cell: (c) => <span className="font-mono text-xs">{runSubject(c.row.original)}</span>,
-    }),
-    column.display({ id: "status", header: "Status", cell: (c) => <Status run={c.row.original} /> }),
-    column.display({
-      id: "error",
-      header: "Error",
-      meta: { className: "max-w-xs" },
-      cell: (c) =>
-        c.row.original.error ? (
-          <span className="block truncate text-xs text-status-error" title={c.row.original.error}>
-            {c.row.original.error}
+      </td>
+      <td className="px-3 py-1.5 align-middle">
+        <span className="font-mono text-xs">{runSubject(run)}</span>
+      </td>
+      <td className="px-3 py-1.5 align-middle">
+        <Status run={run} />
+      </td>
+      <td className="max-w-xs px-3 py-1.5 align-middle">
+        {run.error && (
+          <span className="block truncate text-xs text-status-error" title={run.error}>
+            {run.error}
           </span>
-        ) : null,
-    }),
-  ] as ColumnDef<InventoryRun, never>[];
+        )}
+      </td>
+    </tr>
+  );
 }
 
-/** The add-server runs, newest first, as the orchestrator lists them. */
+/** The add-server runs, newest first, as the orchestrator lists them: dense rows under a sticky header. */
 export function RunsTable({ runs }: { runs: InventoryRun[] }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(timer);
   }, []);
-  const table = useDataTable({
-    data: runs,
-    columns: runColumns(now),
-    getRowId: (run) => `${run.workflow_id}@${run.started_at ?? ""}`,
-  });
   return (
-    <DataTable
-      table={table}
-      label="Add-server runs"
-      rowProps={(run) => ({ "data-testid": "run-row", "data-workflow": run.workflow_id })}
-      empty={<EmptyState title="No add-server runs" description="Neither herzi nor a person has added servers lately." />}
-    />
+    <div className="overflow-auto rounded-xl border bg-card">
+      <table aria-label="Add-server runs" className="w-full border-collapse text-sm">
+        <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
+          <tr className={cn("border-b", DIVIDER.header)}>
+            {HEADERS.map((header) => (
+              <th
+                key={header}
+                scope="col"
+                className={cn(
+                  "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75",
+                  header === "Error" && "max-w-xs"
+                )}
+              >
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className={cn("divide-y", DIVIDER.rows)}>
+          {runs.length === 0 ? (
+            <tr>
+              <td colSpan={HEADERS.length}>
+                <EmptyState title="No add-server runs" description="Neither herzi nor a person has added servers lately." />
+              </td>
+            </tr>
+          ) : (
+            runs.map((run) => <RunRow key={`${run.workflow_id}@${run.started_at ?? ""}`} run={run} now={now} />)
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }

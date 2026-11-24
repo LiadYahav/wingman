@@ -15,7 +15,10 @@
 
 ``code`` is the stable, machine-matched member; ``title`` and ``detail`` are
 for people and may change wording. ``ErrorCode`` is append-only: a shipped
-code is never renamed or removed, because the web app matches on it.
+code is never renamed, and never removed while a route can answer it, because
+the web app matches on it. A code whose every route was removed may go with
+them, recorded in the ADR that removed the routes (ADR-0004's 2026-11-24
+amendment); its name is never reused.
 
 Services raise :class:`AppError` subclasses (or let a ``GitError`` propagate,
 which the handlers translate); they never raise FastAPI's ``HTTPException``.
@@ -41,7 +44,7 @@ from wingman_core.domain.errors import (
 
 
 class ErrorCode(StrEnum):
-    """Stable error identifiers. Append only; never rename or remove one."""
+    """Stable error identifiers. Append only: never renamed; one goes only with its last route."""
 
     VALIDATION_ERROR = "VALIDATION_ERROR"
     NOT_FOUND = "NOT_FOUND"

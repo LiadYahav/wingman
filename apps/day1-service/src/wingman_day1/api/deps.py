@@ -83,7 +83,7 @@ class Day1Context:
     agent_labels: AgentLabelsService | None = None
     """A cluster's excluded Agent labels MR (ADR-0065); without keys its routes answer 501."""
     platforms: tuple[Platform, ...] = ()
-    """segments-manager's and server-scan's own UIs, the top bar's links (2026-11-23)."""
+    """segments-manager's and server-scan's own UIs, the sidebar's links out (ADR-0067)."""
 
 
 def day1_context(request: Request) -> Day1Context:

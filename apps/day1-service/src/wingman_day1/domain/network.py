@@ -75,9 +75,6 @@ class SegmentRecord:
     status: str | None
     type: str | None
     site: str | None
-    dhcp: bool | None = None
-    allocated_at: str | None = None
-    """Set on allocation and never cleared: an Available segment may still carry one."""
 
 
 @dataclass(frozen=True, slots=True)

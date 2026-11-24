@@ -28,7 +28,7 @@ from wingman_day1.domain.servers import ServerRow
 from wingman_day1.infrastructure.fake_fleet import PHASE_SECONDS, FakeUninstallWorkflow, load_fleet
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fake import (
     FakeServerInventory,
     default_fleet_file,
 )

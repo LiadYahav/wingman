@@ -7,7 +7,8 @@
 # listed file shrinks, lower its ceiling (the check prints a note).
 # Regenerate the lines with `python3 scripts/check-file-size.py --list`.
 #
-# Recorded 2026-11-13 from the code-organisation audit: 21 Python and 19
+# Recorded 2026-11-13 from the code-organisation audit (21 Python and 19
+# TypeScript source files, and one test); 2026-11-24: 14 Python and 8
 # TypeScript source files, and one test.
 
   720  apps/day1-service/src/wingman_day1/application/rollouts.py

@@ -27,8 +27,6 @@ from enum import StrEnum
 from typing import Final
 
 ADD_SERVER_WORKFLOW_PREFIX: Final = "add-server-to-mce-"
-ADD_SERVER_HOLDERS: Final = frozenset({"add-server-to-mce", "install-server"})
-"""server-scan's reservation holders of an add-server run (``install-server`` before the rename)."""
 MCE_PREFIX: Final = "ocp4-"
 """What the orchestrator adds to an MCE name that lacks it."""
 MAX_SERVERS: Final = 20

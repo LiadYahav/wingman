@@ -88,7 +88,7 @@ def add_server_workflow(
     """
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_inventory_demo import fake_add_server
-        from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+        from wingman_day1.integrations.server_scan.infrastructure.fake import (
             FakeServerInventory,
         )
 

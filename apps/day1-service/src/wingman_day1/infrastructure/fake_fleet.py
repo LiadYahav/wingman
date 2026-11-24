@@ -2,7 +2,7 @@
 
 ``load_fleet`` reads ``dev/fleet-fixtures/servers.yaml``: the servers, in
 server-scan's row shape, that seed ``FakeServerInventory`` (server-scan's
-integration, ``infrastructure/fakes/inventory.py``), and the seeded uninstall
+integration, ``infrastructure/fake.py``), and the seeded uninstall
 runs. Tests seed both fakes directly; ``DAY1_FAKE_FLEET=true`` (development
 only) seeds them from the fixture. They raise the same domain errors as the
 real adapters.
@@ -40,7 +40,7 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.mce_capacity import SPARE_STATE
 from wingman_day1.domain.servers import RunSummary, ServerRow, uninstall_workflow_id
 from wingman_day1.domain.workflows import WorkflowRun
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
+from wingman_day1.integrations.server_scan.infrastructure.fake import FakeServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.parse import server_row
 
 DEMO_PHASES: Final = (

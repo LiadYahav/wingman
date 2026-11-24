@@ -33,7 +33,7 @@ from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
 from wingman_day1.integrations.segments_manager.infrastructure.fake import FakeSegmentLedger
 from wingman_day1.integrations.server_scan.infrastructure.adapter import HttpServerInventory
-from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
+from wingman_day1.integrations.server_scan.infrastructure.fake import FakeServerInventory
 from wingman_day1.main import Adapters, build_adapters, create_app
 from wingman_day1.settings import Day1Settings
 
