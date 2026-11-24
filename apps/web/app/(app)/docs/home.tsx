@@ -13,7 +13,7 @@ const CARDS = [
   },
   {
     title: "Free Servers (Infrastructure)",
-    desc: "Each MCE's free Agents by InfraEnv pool, as server-scan counts them: Inventory Management's numbers. Each MCE opens Inventory Management.",
+    desc: "Each MCE's free Agents by InfraEnv pool, as server-scan counts them: Inventory Management's numbers. Each MCE opens its own servers in Inventory Management.",
   },
 ] as const;
 

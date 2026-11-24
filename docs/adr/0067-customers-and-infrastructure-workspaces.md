@@ -147,13 +147,16 @@ switch between them, for admins.
   clusters out (`tenantClusters`); a viewer never receives one.
 - **The Dashboard's two cards that name MCEs move**: Where Clusters Run (the
   tenants' clusters by site and Customer MCE) and Free Servers (each MCE's
-  free Agents) are the Infrastructure Overview's, under its numbers: Customer
+  free Agents, each MCE opening its servers in Inventory Management since
+  2026-11-24) are the Infrastructure Overview's, under its numbers: Customer
   MCEs and their sites, seeds and their zones, KV clusters, free servers. The
   Customers Dashboard keeps its numbers, Cluster Health, Pending Approvals and
   OpenShift Versions.
 - **Customer MCEs** lists each site's Customer MCEs from `GET /api/day1/mces`
-  (env, hub version, default mastertag, cluster count, an off-convention name
-  and stray files marked). **Seeds & KV Clusters** lists each site's seeds
+  (env, hub version, cluster count, an off-convention name and stray files
+  marked), each row opening its servers in Inventory Management
+  (`/inventory?mce=<name>`). The default mastertag is the create form's,
+  not the list's (2026-11-24, the user). **Seeds & KV Clusters** lists each site's seeds
   with their zone and hub version, and under each its KV clusters with their
   mastertag and live phase, each opening the cluster page; a KV-named cluster
   outside a seed is listed apart, since create-vm never finds it there.

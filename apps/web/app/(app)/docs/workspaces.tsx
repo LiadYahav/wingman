@@ -9,7 +9,7 @@ const WORKSPACES = [
   },
   {
     title: "Infrastructure (admins)",
-    desc: "What serves the customers: its Overview, Customer MCEs by site, Seeds & KV Clusters, Inventory Management, Quick Links, and links to Segments Manager's and Server Scan's own UIs.",
+    desc: "What serves the customers: its Overview, Customer MCEs by site (each opens its servers in Inventory Management), Seeds & KV Clusters, Inventory Management, Quick Links, and links to Segments Manager's and Server Scan's own UIs.",
   },
 ] as const;
 
