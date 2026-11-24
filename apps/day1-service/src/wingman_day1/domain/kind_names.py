@@ -10,7 +10,9 @@ hold dashes, ADR-0014):
 
 The deployed workflows' shapes, ``ocp4-seed-<site>-<zone>`` and
 ``ocp4-kubevirt-<site>-<zone>…``, are read too (their zone is known) and
-flagged, never hidden, as every off-convention name is. A Customer MCE and a
+flagged, never hidden, as every off-convention name is; so is a seed named
+``ocp4-<lc>-mce-seed-<site>-<id>`` (its lifecycle and id are read, it has no
+zone: a KV cluster on it takes its zone from the seed's InfraEnvs, ADR-0069). A Customer MCE and a
 tenant's cluster keep their rules (``names.py``).
 """
 
@@ -59,6 +61,13 @@ def describe_seed(name: str, *, site: str) -> MceNaming:
             name, site, Env(convention["env"]), convention["id"], (), zone=convention["zone"]
         )
     expected = f"ocp4-<lc>-seed-{site}-<zone>-<id>"
+    hub_shaped = re.match(rf"^ocp4-(?P<env>{_ENVS})-mce-seed-{site_re}-(?P<id>{_LETTER})$", name)
+    if hub_shaped:
+        problem = (
+            f"seed {name!r} is named ocp4-<lc>-mce-seed-<site>-<id>, a shape no written source "
+            f"gives, not as the convention's {expected}; its name carries no zone"
+        )
+        return MceNaming(name, site, Env(hub_shaped["env"]), hub_shaped["id"], (problem,))
     deployed = re.match(rf"^ocp4-seed-{site_re}-(?P<zone>{_SEGMENT})$", name)
     if deployed:
         problem = (

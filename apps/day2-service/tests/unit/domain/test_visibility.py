@@ -43,6 +43,15 @@ def test_a_viewer_knows_the_tenants_clusters_and_the_hosted_clusters_scope_alone
     assert all(sees_scope(ADMIN, s) for s in DefaultsScope)
 
 
+def test_a_cluster_on_a_hub_shaped_seed_is_a_kv_cluster_a_viewer_never_knows() -> None:
+    # ocp4-<lc>-mce-seed-<site>-<id> is a seed (ADR-0067's amendment), so its clusters are KV
+    hub_shaped = "ocp4-prod-mce-seed-site1-a"
+    kv = ClusterRef.hosted("site1", "prod", hub_shaped, "ocp4-prod-kv-site1-az1-a")
+    assert not is_tenant(kv)
+    assert not sees_destination(VIEWER, kv) and sees_destination(ADMIN, kv)
+    assert not is_tenant(ClusterRef.mce_hub("site1", "prod", hub_shaped))
+
+
 def test_the_redactor_has_every_hidden_name_and_no_tenants() -> None:
     assert SIGHT.redactor.names == {
         MCE,

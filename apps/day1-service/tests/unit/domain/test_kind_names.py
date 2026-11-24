@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wingman_day1.domain.cluster_delete import delete_confirm_problems, delete_summary
+from wingman_day1.domain.errors import InvalidInputError
 from wingman_day1.domain.kind_names import (
+    customer_mces,
     describe_cluster_file,
     describe_hub,
     describe_kv_cluster,
     describe_seed,
+    require_customer_mce,
 )
 from wingman_day1.domain.names import Env
 from wingman_day1.domain.paths import ClusterRef
@@ -24,6 +29,23 @@ def test_a_seed_named_as_the_deployed_workflows_find_one_is_flagged_with_its_zon
     assert not seed.follows_convention
     assert (seed.env, seed.zone) == (None, "az2")
     assert "ocp4-<lc>-seed-five-<zone>-<id>" in seed.problems[0]
+
+
+def test_a_hub_shaped_seed_is_a_seed_with_its_lifecycle_and_no_zone_flagged() -> None:
+    seed = describe_seed("ocp4-prod-mce-seed-five-a", site="five")
+    assert not seed.follows_convention
+    assert (seed.env, seed.letter, seed.zone) == (Env.PROD, "a", None)
+    assert "carries no zone" in seed.problems[0]
+    assert describe_hub("ocp4-prod-mce-seed-five-a", site="five") == seed
+    # Another site's, or no letter: off-convention without a lifecycle
+    assert describe_seed("ocp4-prod-mce-seed-six-a", site="five").env is None
+
+
+def test_a_hub_shaped_seed_is_never_placements_candidate() -> None:
+    names = ["ocp4-prod-mce-five-a", "ocp4-prod-mce-seed-five-a", "ocp4-prod-seed-five-az1-a"]
+    assert customer_mces(names, site="five", env=Env.PROD) == ["ocp4-prod-mce-five-a"]
+    with pytest.raises(InvalidInputError, match="is a seed"):
+        require_customer_mce("ocp4-prod-mce-seed-five-a")
 
 
 def test_a_seed_of_another_site_or_shape_does_not_follow() -> None:

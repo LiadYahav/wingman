@@ -61,7 +61,9 @@ export function WorkspacesSection() {
         <Callout type="tip" title="Names the workflows read today">
           The platform&apos;s workflows still look for a seed named <InlineCode>ocp4-seed-&lt;site&gt;-&lt;zone&gt;</InlineCode>{" "}
           and KV clusters named <InlineCode>ocp4-kubevirt-&lt;site&gt;-&lt;zone&gt;</InlineCode>. Wingman recognises those
-          too, and marks them off-convention; every file in a seed&apos;s folder is a KV cluster, as the workflows list them.
+          too, and a seed named <InlineCode>ocp4-&lt;lc&gt;-mce-seed-&lt;site&gt;-&lt;id&gt;</InlineCode> (whose name gives
+          no zone), and marks them off-convention; every file in a seed&apos;s folder is a KV cluster, as the workflows list
+          them.
         </Callout>
         <Callout type="info" title="Segments Manager and Server Scan">
           The team keeps both apart from Wingman: Infrastructure&apos;s sidebar links to each one&apos;s own UI, in a new

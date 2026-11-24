@@ -1,7 +1,7 @@
 # ADR-0067: Two workspaces, Customers and Infrastructure: seeds and KV clusters are kinds of their own, and a viewer never knows of them or of the MCEs
 
 Date: 2026-11-23
-Status: Accepted; amended by ADR-0068 (a viewer reads no MCE, no infrastructure name and no infrastructure file anywhere, and a tenant's cluster says its site but not its MCE)
+Status: Accepted; amended by ADR-0068 (a viewer reads no MCE, no infrastructure name and no infrastructure file anywhere, and a tenant's cluster says its site but not its MCE); amended 2026-11-24 (a seed named `ocp4-<lc>-mce-seed-<site>-<id>`; see the amendments)
 
 ## Context
 
@@ -247,3 +247,39 @@ locally. The existing fixtures keep their names.
   its Delete's name, the Clusters list without it, a viewer's sidebar and the
   admins-only pages; `overview.spec.ts` (both Overviews) and
   `platforms-apart.spec.ts` (the links out in Infrastructure's sidebar).
+
+## Amendment (2026-11-24): a seed named `ocp4-<lc>-mce-seed-<site>-<id>`
+
+**A folder named `ocp4-<lc>-mce-seed-<site>-<id>` is a seed, flagged
+off-convention, with its lifecycle and id read and no zone.**
+
+The user thinks seeds may be named like `ocp4-prod-mce-seed-five-a`. No
+written source gives that shape: the convention says
+`ocp4-<lc>-seed-<site>-<zone>-<id>`, the deployed workflows
+`ocp4-seed-<site>-<zone>`, workflows PR #26 `ocp4-<lc>-seed-<site>-<id>`.
+Read as a Customer MCE, such a folder would be a viewer's MCE and a
+placement candidate for a tenant's cluster, which a seed never is.
+
+1. **The kind** (`wingman_core.domain.cluster_kinds`, so day1 and day2 agree):
+   `ocp4-<lc>-mce-seed-` followed by at least two segments is a seed. So
+   `ocp4-prod-mce-seed-five-a` and `ocp4-test-mce-seed-bat-yam-b` are seeds,
+   and every file in them a KV cluster; `ocp4-prod-mce-seed-a` (a Customer
+   MCE of the site `seed`) and `ocp4-mce-seed-five-a` (no lifecycle) are
+   still Customer MCEs.
+2. **The name** (day1's `domain/kind_names.py`): read against its site, its
+   `<lc>` and `<id>` known, its zone `None`, and one problem saying it is a
+   shape no written source gives. The web marks it off-convention, as the
+   deployed shape. A KV cluster created on it takes its zone from the
+   seed's bare-metal InfraEnvs (ADR-0069).
+3. **Placement** never offers it, by its kind (section 4), and a create on
+   it is refused as on any seed.
+
+**Rejected:** reading the shape only once a source writes it: until then a
+seed so named would be a Customer MCE a viewer could know of.
+
+**Verification:** `packages/wingman-core/tests/unit/domain/test_cluster_kinds.py`
+(the shape is a seed, its files KV clusters; the near misses are MCEs),
+`apps/day1-service/tests/unit/domain/test_kind_names.py` (its lifecycle,
+id, no zone, the problem; never placement's candidate, refused for a
+tenant), `apps/day2-service/tests/unit/domain/test_visibility.py` (a KV
+cluster on it and its hub are an admin's destinations).

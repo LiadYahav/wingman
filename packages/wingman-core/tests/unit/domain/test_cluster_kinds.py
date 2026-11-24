@@ -20,6 +20,8 @@ from wingman_core.domain.cluster_kinds import (
         "ocp4-test-seed-bat-yam-az3-b",  # a site with a dash
         "ocp4-seed-five-az1",  # what the deployed workflows look for
         "ocp4-prep-seed-five-a",  # workflows PR #26's redesign: still a seed by its word
+        "ocp4-prod-mce-seed-five-a",  # the hub-shaped name the user expects (ADR-0067's amendment)
+        "ocp4-test-mce-seed-bat-yam-b",  # the same, at a site with a dash
     ],
 )
 def test_a_folder_with_the_reserved_word_seed_is_a_seed(folder: str) -> None:
@@ -31,7 +33,8 @@ def test_a_folder_with_the_reserved_word_seed_is_a_seed(folder: str) -> None:
     [
         "ocp4-prod-mce-five-a",
         "ocp4-mce-workflow-test",  # off-convention, still a tenant's hub
-        "ocp4-prod-mce-seed-a",  # 'seed' is not the flavor here
+        "ocp4-prod-mce-seed-a",  # 'seed' is the site here: no <site>-<id> after it
+        "ocp4-mce-seed-five-a",  # no lifecycle: not the hub-shaped seed
         "ocp4-prod-seedling-five-a",  # a word that starts with seed is not the word
         "ocp4-dev-seed-five-az1-a",  # 'dev' is no lifecycle: not the convention's seed
         "seed-five-az1",
@@ -73,5 +76,11 @@ def test_a_tenant_name_under_a_customer_mce_is_a_tenant(stem: str) -> None:
 def test_every_file_in_a_seed_folder_is_a_kv_cluster_as_the_workflows_list_them() -> None:
     assert hosted_cluster_kind("anything", mce="ocp4-seed-five-az1") is HostedClusterKind.KV
     assert hosted_cluster_kind("ocp4-prod-eck-five-a", mce="ocp4-prod-seed-five-az1-a") is (
+        HostedClusterKind.KV
+    )
+
+
+def test_a_cluster_in_a_hub_shaped_seed_folder_is_a_kv_cluster() -> None:
+    assert hosted_cluster_kind("ocp4-prod-eck-five-a", mce="ocp4-prod-mce-seed-five-a") is (
         HostedClusterKind.KV
     )
