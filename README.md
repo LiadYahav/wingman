@@ -68,9 +68,9 @@ wingman/
 │   │   │                          #   the Overview (page.tsx, at /), clusters, specs, addons,
 │   │   │                          #   lints, inventory, quick-links, approvals, audit, docs,
 │   │   │                          #   settings
-│   │   ├── components/            # ui, common, layout, data-table, and one folder per area:
-│   │   │                          #   overview, clusters, specs, addons, machine-configs, tuning,
-│   │   │                          #   inventory, quick-links
+│   │   ├── components/            # ui, common, layout, and one folder per area: overview,
+│   │   │                          #   clusters, specs, addons, machine-configs, tuning,
+│   │   │                          #   image-mirrors, infrastructure, inventory, quick-links
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
 │   │   ├── types/                 # day1/, day2/, one file per area, problem.ts (index.ts re-exports them)
 │   │   └── e2e/                   # Playwright: the mocked and live projects
