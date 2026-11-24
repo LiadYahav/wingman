@@ -91,7 +91,7 @@ in-memory provision-cluster stands in. Each switch needs it too:
 
 | Workflow | Switch | Where | ADR |
 |---|---|---|---|
-| `provision-cluster` | none: every create starts it | Create | ADR-0042 |
+| `provision-cluster` | none: every create starts it | Create, and a KV cluster's Create on its seed (`mce=<seed>`, ADR-0069) | ADR-0042 |
 | `upgrade-cluster` | `DAY1_UPGRADES` | the cluster page, the clusters list | ADR-0055 |
 | `uninstall-server-from-hc` | `WORKFLOWS_API_URL` with `SERVER_SCAN_URL` | the Nodes tab | ADR-0038 |
 | `add-server-to-mce` | `DAY1_ADD_SERVERS` | Inventory Management | ADR-0057 |

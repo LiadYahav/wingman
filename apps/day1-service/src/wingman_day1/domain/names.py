@@ -217,11 +217,11 @@ def new_cluster_problems(
             f"sequence {sequence!r} of cluster {stem!r} must be one letter, a to z "
             f"({base}-a): a number is not the convention"
         )
-    problems.extend(_create_length_problems(stem, naming))
+    problems.extend(create_length_problems(stem, naming))
     return problems
 
 
-def _create_length_problems(stem: str, naming: HostedClusterNaming) -> list[str]:
+def create_length_problems(stem: str, naming: HostedClusterNaming) -> list[str]:
     """Why ``stem`` is too long for a new cluster: provision-cluster's limit, then the chart's."""
     name = stem.removeprefix(CLUSTER_FILE_PREFIX)
     problems = (
@@ -288,7 +288,7 @@ def suggest_cluster_name(
             None,
             (f"MCE {mce!r} does not follow ocp4-<env>-mce-{site}-<letter>, so it gives no env",),
         )
-    while len(short) > 1 and _create_length_problems(f"ocp4-{env}-{short}-{site}-a", naming):
+    while len(short) > 1 and create_length_problems(f"ocp4-{env}-{short}-{site}-a", naming):
         short = short[:-1].rstrip("-")
     base = f"ocp4-{env}-{short}-{site}"
     free = next((letter for letter in SEQUENCE_LETTERS if f"{base}-{letter}" not in taken), None)
@@ -301,4 +301,4 @@ def suggest_cluster_name(
             (f"every name from {base}-a to {base}-z is taken; type another name",),
         )
     name = f"{base}-{free}"
-    return NameSuggestion(name, env, short, free, tuple(_create_length_problems(name, naming)))
+    return NameSuggestion(name, env, short, free, tuple(create_length_problems(name, naming)))
