@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
+from wingman_core.domain.redaction import Redactor
 from wingman_core.domain.users import User
 from wingman_day2.domain import layout
-from wingman_day2.domain.clusters import ClusterKind, ClusterRef, env_from_name
+from wingman_day2.domain.clusters import ClusterKind, ClusterRef, DefaultsScope, env_from_name
 from wingman_day2.domain.day1 import Day1Index
 from wingman_day2.domain.errors import (
     AmbiguousClusterError,
@@ -26,7 +28,7 @@ from wingman_day2.domain.findings import Finding, Rule, warning
 from wingman_day2.domain.lints import lint_team, position_conflicts
 from wingman_day2.domain.platform import Destination, TeamPlan, discover, plan_team
 from wingman_day2.domain.teams import Team, TeamRepo, control_files
-from wingman_day2.domain.visibility import sees_destination
+from wingman_day2.domain.visibility import Sight, sees_destination
 from wingman_day2.ports import Day1Repository, SigsRepository
 
 
@@ -77,11 +79,28 @@ class Topology:
         )
 
     def visible_to(self, user: User) -> Topology:
-        """The topology ``user`` may know of: a viewer's has no MCE, seed or KV cluster."""
+        """The topology ``user`` may know of: a viewer's has the tenants' clusters alone.
+
+        Each team's plan keeps those destinations alone too (ADR-0068), so what
+        is counted from it (a default's reach, an add-on's installs) is theirs.
+        """
         if user.is_admin:
             return self
-        shown = tuple(s for s in self.clusters if sees_destination(user, s.ref))
-        return replace(self, clusters=shown)
+
+        def sees(ref: ClusterRef) -> bool:
+            return sees_destination(user, ref)
+
+        teams = tuple(replace(s, plan=s.plan.only(sees)) for s in self.teams)
+        return replace(self, teams=teams, clusters=tuple(s for s in self.clusters if sees(s.ref)))
+
+    def sight(self, scopes: Mapping[DefaultsScope, str]) -> Sight:
+        """What a viewer may know of these destinations; ``scopes``: each scope's words."""
+        return Sight.of((s.ref for s in self.clusters), scopes)
+
+    @property
+    def infrastructure(self) -> Redactor:
+        """Every name a viewer never reads: each MCE folder's, the hub's, each UPI and KV one's."""
+        return self.sight({}).redactor
 
     def resolve(self, key: str, *, mce: str | None = None) -> ClusterSummary:
         """The cluster ``key`` names: a cluster id, or a bare name that is unique.
@@ -94,9 +113,7 @@ class Topology:
             s for s in self.clusters if s.ref.name == key and (mce is None or s.ref.mce == mce)
         ]
         if not found:
-            raise UnknownClusterError(
-                f"no cluster named {key!r} in day1 or any team repo", details={"cluster": key}
-            )
+            raise unknown_cluster(key)
         if len(found) > 1:
             ids = sorted(s.ref.id for s in found)
             raise AmbiguousClusterError(
@@ -104,6 +121,13 @@ class Topology:
                 details={"cluster": key, "candidates": ids},
             )
         return found[0]
+
+
+def unknown_cluster(key: str) -> UnknownClusterError:
+    """What naming no destination answers (404)."""
+    return UnknownClusterError(
+        f"no cluster named {key!r} in day1 or any team repo", details={"cluster": key}
+    )
 
 
 class TopologyService:

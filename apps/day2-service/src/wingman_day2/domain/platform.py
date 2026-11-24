@@ -19,6 +19,7 @@ in both a defaults folder and a cluster folder breaks it (the XOR rule).
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -109,6 +110,15 @@ class TeamPlan:
     def destination(self, ref: ClusterRef) -> Destination | None:
         """``ref``'s entry, if this team registers it."""
         return next((d for d in self.destinations if d.ref == ref), None)
+
+    def only(self, sees: Callable[[ClusterRef], bool]) -> TeamPlan:
+        """The plan of the destinations ``sees`` keeps, as if the others were not there."""
+        return TeamPlan(
+            self.team,
+            tuple(d for d in self.destinations if sees(d.ref)),
+            tuple(a for a in self.apps if sees(a.ref)),
+            tuple(e for e in self.excluded if sees(e.ref)),
+        )
 
     def duplicates(self) -> list[Finding]:
         """One error per wrapper app generated more than once (the XOR rule)."""

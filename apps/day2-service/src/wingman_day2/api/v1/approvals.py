@@ -1,4 +1,10 @@
-"""Approvals and audit. An MR is addressed by ``{team}/{iid}``, never by number alone (ADR-0007)."""
+"""Approvals and audit. An MR is addressed by ``{team}/{iid}``, never by number alone (ADR-0007).
+
+A viewer reads the merge requests and commits about a tenant's cluster alone,
+and of a diff a tenant's own files and the team's own (ADR-0068,
+``api/v1/visible.py``): one with no such file is, for them, one that does not
+exist.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +20,7 @@ from wingman_day2.api.v1.approvals_schemas import (
 )
 from wingman_day2.api.v1.dependencies import Services
 from wingman_day2.api.v1.schemas import MRDetailOut
+from wingman_day2.api.v1.visible import view_of
 from wingman_day2.application.approvals import FileEdit
 
 router = APIRouter(prefix="/api/day2", tags=["approvals"])
@@ -22,15 +29,26 @@ router = APIRouter(prefix="/api/day2", tags=["approvals"])
 @router.get("/approvals")
 async def list_approvals(user: CurrentUser, day2: Services) -> list[MRDetailOut]:
     """Open Wingman MRs across every team repo, newest first."""
-    return [MRDetailOut.of_change(c.team.name, c.change) for c in await day2.approvals.pending()]
+    seen = await view_of(day2, user)
+    return seen.all_shown(
+        [
+            MRDetailOut.of_change(c.team.name, c.change)
+            for c in await day2.approvals.pending()
+            if seen.sees_merge_request(c.change.merge_request)
+        ]
+    )
 
 
 @router.get("/approvals/{team}/{iid}")
 async def get_approval(team: str, iid: int, user: CurrentUser, day2: Services) -> ApprovalDetailOut:
     """One MR and its diff."""
+    seen = await view_of(day2, user)
     change, diffs = await day2.approvals.detail(team, iid)
-    return ApprovalDetailOut(
-        mr=MRDetailOut.of_change(team, change.change), diffs=[FileDiffOut.of(d) for d in diffs]
+    shown = seen.merge_request_diffs(change.change.merge_request, diffs)
+    return seen.shown(
+        ApprovalDetailOut(
+            mr=MRDetailOut.of_change(team, change.change), diffs=[FileDiffOut.of(d) for d in shown]
+        )
     )
 
 
@@ -75,11 +93,15 @@ async def audit_commits(
     per_page: int = Query(default=50, ge=1, le=100),
     page: int = Query(default=1, ge=1, le=20),
 ) -> list[CommitRecordOut]:
-    """Commits across team repos, newest first."""
-    return [
-        CommitRecordOut.of(c.team, c.commit)
-        for c in await day2.audit.commits(per_page=per_page, page=page)
-    ]
+    """Commits across team repos, newest first (a viewer's page may be shorter)."""
+    seen = await view_of(day2, user)
+    return seen.all_shown(
+        [
+            CommitRecordOut.of(c.team, c.commit)
+            for c in await day2.audit.commits(per_page=per_page, page=page)
+            if seen.sees_commit(c.commit)
+        ]
+    )
 
 
 @router.get("/audit/merge-requests")
@@ -89,11 +111,15 @@ async def audit_merge_requests(
     per_page: int = Query(default=50, ge=1, le=100),
     page: int = Query(default=1, ge=1, le=20),
 ) -> list[MRDetailOut]:
-    """Wingman MRs in any state across team repos, newest first."""
-    return [
-        MRDetailOut.of(m.team, m.merge_request)
-        for m in await day2.audit.merge_requests(per_page=per_page, page=page)
-    ]
+    """Wingman MRs in any state across team repos, newest first (a viewer's page may be shorter)."""
+    seen = await view_of(day2, user)
+    return seen.all_shown(
+        [
+            MRDetailOut.of(m.team, m.merge_request)
+            for m in await day2.audit.merge_requests(per_page=per_page, page=page)
+            if seen.sees_merge_request(m.merge_request)
+        ]
+    )
 
 
 @router.get("/audit/commits/{sha}/diff")
@@ -101,5 +127,6 @@ async def audit_commit_diff(
     sha: str, user: CurrentUser, day2: Services, team: str | None = Query(default=None)
 ) -> list[FileDiffOut]:
     """What a commit changed, in the team repo that has it."""
+    seen = await view_of(day2, user)
     _, diffs = await day2.audit.commit_diff(sha, team=team)
-    return [FileDiffOut.of(d) for d in diffs]
+    return seen.all_shown([FileDiffOut.of(d) for d in seen.commit_diffs(sha, diffs)])
