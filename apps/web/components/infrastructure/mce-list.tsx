@@ -140,7 +140,7 @@ function Body() {
 export function MceList() {
   const mces = useMces();
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
       <PageHeader
         title="Customer MCEs"
         subtitle="The hubs of the customers' hosted clusters, by site, as the day1 repo has them; each opens its servers in Inventory Management. Placement picks among them for a new cluster."

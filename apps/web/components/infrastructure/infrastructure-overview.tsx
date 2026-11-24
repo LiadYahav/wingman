@@ -60,7 +60,7 @@ function InfrastructureStats() {
  */
 export function InfrastructureOverview() {
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
       <PageHeader title="Infrastructure" subtitle="The MCEs, seeds and servers behind the customers' clusters">
         <div className="flex flex-wrap items-center gap-2" data-testid="infrastructure-actions">
           <Link href="/inventory" className={SECONDARY}><Boxes aria-hidden />Inventory Management</Link>

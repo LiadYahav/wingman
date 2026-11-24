@@ -30,7 +30,7 @@ export function StatCard({
               ? <Skeleton className="mt-2 h-9 w-16" />
               : <p className={cn("mt-1 text-3xl font-bold tabular-nums", c.value)}>{value ?? "—"}</p>
             }
-            {hint && !loading && <p className="mt-1 text-xs text-muted-foreground truncate">{hint}</p>}
+            {hint && !loading && <p className="mt-1 text-xs text-muted-foreground line-clamp-2 sm:truncate">{hint}</p>}
           </div>
           <div className={cn("rounded-xl p-2.5 shrink-0", c.bg)}>
             <Icon className={cn("h-5 w-5", c.icon)} />
