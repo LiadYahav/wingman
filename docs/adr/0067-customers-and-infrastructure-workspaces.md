@@ -155,8 +155,9 @@ switch between them, for admins.
 - **Customer MCEs** lists each site's Customer MCEs from `GET /api/day1/mces`
   (env, hub version, cluster count, an off-convention name and stray files
   marked), each row opening its servers in Inventory Management
-  (`/inventory?mce=<name>`). The default mastertag is the create form's,
-  not the list's (2026-11-24, the user). **Seeds & KV Clusters** lists each site's seeds
+  (`/inventory?mce=<name>`); its Create MCE is a preview that writes nothing
+  (ADR-0018's 2026-11-24 amendment). The default mastertag is the create
+  form's, not the list's (2026-11-24, the user). **Seeds & KV Clusters** lists each site's seeds
   with their zone and hub version, and under each its KV clusters with their
   mastertag and live phase, each opening the cluster page; a KV-named cluster
   outside a seed is listed apart, since create-vm never finds it there.

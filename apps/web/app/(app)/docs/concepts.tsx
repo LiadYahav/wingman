@@ -40,7 +40,7 @@ export function ConceptsSection() {
             term: "MCE",
             admin: true,
             color: "bg-emerald-500/10 text-emerald-500",
-            description: "A multicluster engine hub that runs hosted clusters' control planes: a folder at sites/{site}/mces/{mce}/. Its values.yaml holds the default mastertag for new clusters. MCE names follow ocp4-{env}-mce-{site}-{letter}. Read-only in Wingman: MCE onboarding happens elsewhere.",
+            description: "A multicluster engine hub that runs hosted clusters' control planes: a folder at sites/{site}/mces/{mce}/. Its values.yaml holds the default mastertag for new clusters. MCE names follow ocp4-{env}-mce-{site}-{letter}. Read-only in Wingman: MCE onboarding happens elsewhere, and Customer MCEs' Create MCE only previews how one will be made.",
             example: "ocp4-prod-mce-site1-a — a prod MCE on site1",
           },
           {

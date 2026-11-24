@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { customerMcesBySite, mceServersHref } from "@/lib/infrastructure";
 import { plural } from "@/lib/utils";
 import type { Mce } from "@/types";
+import { CreateMcePreview } from "./create-mce-preview";
 import { Chip, OffConvention, PageHeader, SiteHeading } from "./page-parts";
 import { useMces } from "./use-infrastructure";
 
@@ -121,7 +122,7 @@ function Body() {
     return (
       <EmptyState
         icon={ServerCog} bordered title="No Customer MCEs"
-        description="Each is a folder of the day1 repo, sites/<site>/mces/<mce>/; Wingman lists them and never creates one."
+        description="Each is a folder of the day1 repo, sites/<site>/mces/<mce>/, installed by hand today; Wingman lists them and creates none. Create MCE previews how one will be made."
         data-testid="mces-empty"
       />
     );
@@ -133,15 +134,19 @@ function Body() {
  * Customer MCEs (ADR-0067, ADR-0018): the hubs of the customers' hosted
  * clusters, by site, as the day1 repo's folders say them, each opening its
  * servers in Inventory Management. Read only: Wingman never creates or
- * changes an MCE. The seeds are on their own page.
+ * changes an MCE, and Create MCE is a preview of how one will be made
+ * (ADR-0018's 2026-11-24 amendment). The seeds are on their own page.
  */
 export function MceList() {
+  const mces = useMces();
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
       <PageHeader
         title="Customer MCEs"
         subtitle="The hubs of the customers' hosted clusters, by site, as the day1 repo has them; each opens its servers in Inventory Management. Placement picks among them for a new cluster."
-      />
+      >
+        <CreateMcePreview mces={mces.data ?? []} />
+      </PageHeader>
       <Body />
     </div>
   );

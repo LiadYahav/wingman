@@ -70,7 +70,10 @@ Explicit user instructions; violating one is a real mistake, not style.
     every other day1 change by its own MR (edit, delete, sync, import,
     rollouts). The orchestrator API has no auth; that is accepted.
 14. **Site and MCE are read-only in Wingman** (user decision 2026-11-07).
-    Wingman never creates them; MCE onboarding happens elsewhere.
+    Wingman never creates them; MCE onboarding happens elsewhere. Customer
+    MCEs' Create MCE is a preview of the vision (the user, 2026-11-24): its
+    form works, its Create stays disabled with the reason, and it calls no
+    API and writes nothing (ADR-0018's amendment).
 15. **Don't add network policies** — they cause connectivity issues.
 16. **Files and functions stay small** (ADR-0056): a source file ≤ 500 lines
     (a test ≤ 800), Python complexity ≤ 12, a web function ≤ 200 lines and

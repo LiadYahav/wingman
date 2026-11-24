@@ -49,6 +49,15 @@ export function WorkspacesSection() {
           Only <strong>Delete</strong> differs: it says the tenants&apos; VMs it hosts go with it, and asks you to type the
           cluster&apos;s name before it opens the merge request.
         </Callout>
+        <Callout type="info" title="Create MCE is a preview">
+          Customer MCEs&apos; <strong>Create MCE</strong> shows what creating one will ask for and do on the platform&apos;s
+          design: the site, the lifecycle, the OpenShift version and the workers per zone; the name,{" "}
+          <InlineCode>ocp4-&lt;lc&gt;-mce-&lt;site&gt;-&lt;id&gt;</InlineCode> with the site&apos;s next free letter; a master
+          VM in each of the site&apos;s seed zones and the workers spread over them, every VM a{" "}
+          <InlineCode>kv32</InlineCode>; and the steps, from creating the VMs to its day1 folder. Its Create stays disabled:
+          a Customer MCE is installed by hand today (the platform&apos;s procedure 12), and nothing in the preview is sent
+          or written.
+        </Callout>
         <Callout type="tip" title="Names the workflows read today">
           The platform&apos;s workflows still look for a seed named <InlineCode>ocp4-seed-&lt;site&gt;-&lt;zone&gt;</InlineCode>{" "}
           and KV clusters named <InlineCode>ocp4-kubevirt-&lt;site&gt;-&lt;zone&gt;</InlineCode>. Wingman recognises those
