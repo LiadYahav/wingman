@@ -29,6 +29,8 @@ from typing import Final
 
 import yaml
 
+from wingman_core.domain.release_tags import without_arch
+
 LADDER_PATH: Final = "upgrade/ladder.yaml"
 README_PATH: Final = "upgrade/README.md"
 
@@ -36,7 +38,6 @@ _RELEASE: Final = re.compile(r"^4\.[0-9]+\.[0-9]+$")
 """``ladder.schema.json``, ``$defs.rung.version``."""
 _MINOR: Final = re.compile(r"^4\.[0-9]+$")
 """``mce.schema.json``, ``mce.supportedHostedVersions`` items."""
-_ARCH_SUFFIX: Final = "-x86_64"
 
 
 def mce_rules_path(mce: str) -> str:
@@ -70,12 +71,12 @@ class OpenShiftVersions:
 
 
 def bare_release(version: str) -> str:
-    """``4.20.44-x86_64`` → ``4.20.44``, the form the ladder writes."""
-    return version.strip().removesuffix(_ARCH_SUFFIX)
+    """``4.20.44-x86_64`` → ``4.20.44``, the form the ladder writes (any arch comes off)."""
+    return without_arch(version.strip())
 
 
 def is_release(version: str) -> bool:
-    """Whether ``version`` (``-x86_64`` allowed) is a release, ``4.N.N``."""
+    """Whether ``version`` (an arch allowed, ``-x86_64``) is a release, ``4.N.N``."""
     return _RELEASE.match(bare_release(version)) is not None
 
 

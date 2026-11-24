@@ -43,6 +43,7 @@ import { isTuningPath, tuningNames } from "@/lib/tuning-profiles";
 import { TuningProfilesPicker } from "@/components/tuning/tuning-profiles-picker";
 import { mirrorCreateInput } from "@/components/image-mirrors/mirror-create-input";
 import { isMirrorInput } from "@/lib/image-mirrors";
+import { offeredRelease } from "@/lib/release-tags";
 import { nodepoolCreateInput } from "@/components/clusters/nodepool-create-input";
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
@@ -60,13 +61,6 @@ function formatVariableName(name: string) {
 }
 
 const asOption = (value: string): ComboboxOption => ({ value, label: value });
-
-/** The entry of `offered` that `version` names (`4.18.56-x86_64` is `4.18.56`), or `null`. */
-function offeredRelease(version: unknown, offered: string[]): string | null {
-  if (typeof version !== "string" || !version.trim()) return null;
-  const bare = version.trim().replace(/-x86_64$/, "");
-  return offered.includes(bare) ? bare : null;
-}
 
 /** `a`, `a and b`, `a, b and c`. */
 function joinWords(words: string[]): string {

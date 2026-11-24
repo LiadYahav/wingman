@@ -110,6 +110,9 @@ def test_an_mce_card_says_its_hub_version_and_how_many_clusters_it_holds() -> No
     assert sections[2].cards[0].description == "OpenShift 4.16.27 · 1 hosted cluster"
     lone, _ = generated_sections(config(hub=None), [MceInfo("s", "m")], {})
     assert lone[0].cards[0].description is None
+    # The hub's release without its arch: a prerelease keeps its name
+    rc, _ = generated_sections(config(hub=None), [MceInfo("s", "m", "4.16.0-rc.1-x86_64")], {})
+    assert rc[0].cards[0].description == "OpenShift 4.16.0-rc.1"
 
 
 def test_an_override_replaces_a_cluster_address_and_the_rest_follow_the_template() -> None:

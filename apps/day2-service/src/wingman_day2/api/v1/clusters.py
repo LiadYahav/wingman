@@ -36,6 +36,7 @@ from wingman_day2.api.v1.visible import view_of
 from wingman_day2.application.changes import InstallSpec
 from wingman_day2.domain.clusters import ClusterKind
 from wingman_day2.domain.errors import ChangeRefusedError
+from wingman_day2.domain.versions import ocp_version
 
 router = APIRouter(prefix="/api/day2", tags=["clusters"])
 
@@ -258,7 +259,7 @@ async def upgrade_check(
         UpgradeCheckOut(
             cluster=summary.ref.id,
             from_version=summary.ocp_version,
-            to_version=to.split("-", 1)[0],
+            to_version=ocp_version(to),
             warnings=findings(found),
         )
     )

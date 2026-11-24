@@ -1,7 +1,7 @@
 # ADR-0023: day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended 2026-11-24 (3.58.1: `mastertag-invalid` checks the tag as day1 and the hostedclusters-setup chart take it)
 
 ## Context
 
@@ -62,3 +62,21 @@ natural place to check before an MR, for every team at once.
 The oracle's broken-tree scenarios require the same set of failing rules
 from both implementations; `tests/unit/application/test_changes.py` covers a
 change refused for an error it would add (`upi-name-reused`).
+
+## Amendment (2026-11-24, 3.58.1)
+
+`mastertag-invalid` checks a tag with `wingman_core.domain.release_tags.is_release_tag`,
+the one shape day1 checks a cluster file's `mastertag` against too: what the
+hostedclusters-setup chart renders into a release image (`X.Y.Z`, then
+optionally `-` and lower-case letters, digits, `_`, `.` and `-`, at most 128
+characters). render_chain.py's `MASTERTAG_RE` (`-\S+`) is looser: it also
+passes upper case and characters no image tag holds (`4.16.27-x86_64:latest`),
+which no OpenShift release is tagged with, so Wingman reports those where
+render_chain does not. A prerelease (`4.16.0-rc.1-x86_64`) is valid to both.
+
+The OCP version stays the platform's own: what comes before a tag's first
+`-` (`splitList "-" | first`), which is what the `ocp-versions/<v>/` pins and
+the `day2.gitops/ocp-version` label are keyed by; a prerelease is its
+`X.Y.Z` there. `wingman_day2.domain.versions.ocp_version` is the one place
+day2 derives it (the upgrade check and its answer did it again). An oracle
+scenario renders a prerelease tag and requires both to agree.

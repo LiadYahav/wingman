@@ -6,6 +6,7 @@
  */
 
 import { asEntries } from "@/lib/machine-configs";
+import { offeredRelease } from "@/lib/release-tags";
 import { TUNING, TUNING_RULE, sameTuning, tuningNames, tuningRuleNames } from "@/lib/tuning-profiles";
 import { sameValues, type Values } from "@/lib/values";
 import type { ClusterSpec, ConfigEntry, CreateClusterRequest, Mce, TemplateField } from "@/types";
@@ -162,9 +163,5 @@ function sameConfigNames(a: ConfigEntry[], b: ConfigEntry[]): boolean {
 
 /** The release to preview with: the flavor's preset, else the MCE's default, else the newest offered. */
 export function previewRelease(preset: unknown, mce: Mce | undefined, offered: string[]): string | null {
-  const bare = (v: unknown) => (typeof v === "string" ? v.trim().replace(/-x86_64$/, "") : "");
-  for (const candidate of [bare(preset), bare(mce?.default_mastertag)]) {
-    if (candidate && offered.includes(candidate)) return candidate;
-  }
-  return offered[0] ?? null;
+  return offeredRelease(preset, offered) ?? offeredRelease(mce?.default_mastertag, offered) ?? offered[0] ?? null;
 }
