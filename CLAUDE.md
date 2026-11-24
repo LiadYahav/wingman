@@ -189,72 +189,54 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-24 — 3.55.0: Wingman follows herzi's used Agents and marks.**
-- **herzi** (read 2026-11-23, every branch and PR): `main` `0ef4d2a`
-  (v1.2.1) is add-only and blocks the pool of any NodePool with a
-  `matchExpressions`; draft PR #1 proposes `redbull.io/claimed`; the branch
-  `docs/retire-used-servers-plan` (`578edf1`, decisions approved, not
-  built) labels every bound Agent `redbull.io/ever-installed`, removes it
-  through remove-server-from-mce once free, accepts exactly that one
-  `DoesNotExist`, and holds a removal while a NodePool that could take the
-  Agent lacks it.
-- **Placement** (ADR-0050's 2026-11-23 amendment): a free Agent carrying a
-  used-Agent key is no free server. The keys come from one place,
-  `WorkflowKeys.used_agent_labels`: `DAY1_EXCLUDED_AGENT_LABELS` when set,
-  else herzi's label (`domain/used_agents.py`).
-- **Inventory Management** (ADR-0057's 3.55.0 amendment): used Agents read
-  by label alone (`HubApi.used_agents`, `<key>,!agentMachineRef`, 30 s),
-  shown apart and never available; the MCE's NodePools that lack the
-  exclusion listed by cluster once it matters; each pool shows herzi's
-  InfraEnv marks (ignore, paused, blocked-until, state's no hardware) from
-  the list already read.
-- **The setting** (ADR-0065's 3.55.0 amendment): still shipped empty; the
-  value is `["redbull.io/ever-installed"]` alone, set only when
-  `docs/upgrade/3.54-to-3.55.md` step 6 holds on every MCE.
-- `hub_api.py`'s parsers moved to `hub_objects.py` (25 files left in the
-  size baseline).
+**2026-11-24 — 3.58.0: a viewer reads no infrastructure (ADR-0068).**
+- **The rules, in day1 and day2** (ADR-0068 §1): a list leaves out what is
+  about the infrastructure, one such item is a missing one (404), every
+  field that names it is `null` (`ADMIN_ONLY` in the response models,
+  `wingman_core.web.viewer.for_viewer`), free text has every infrastructure
+  name the service knows as `[hidden]` (`wingman_core.domain.redaction`),
+  a diff is a tenant's file alone, and a viewer's cluster is found by its
+  name (`site`/`mce`, day2's id, are an admin's). Admins are unchanged.
+- **A tenant's page**: its site (it is in the name), never its MCE; its own
+  file, NodePools and InfraEnv names stay; the network card is the file's
+  VLAN and segment (no segments-manager read); a failed live-status read
+  says only that it failed. The name suggestion is an admin's.
+- **day1** (`api/v1/visible.py`: `cluster_ref`, `shown`, `seen_changes`,
+  `seen_diffs`): live status and bulk status by name, `mce` optional;
+  approvals and audit the flavors' and tenants' clusters'; a viewer's
+  commits from each Customer MCE's `hostedClusters/` history.
+  `tests/api/test_viewer_reads_api.py` crawls every viewer route; a new one
+  must join its list.
+- **day2** (`api/v1/visible.py`'s `View`, `domain/visibility.py`'s `Sight`):
+  tenants' hosted clusters only, `id` the bare name, `mce`/`argo`/`gitlab_url`
+  `null`, tenant paths from the cluster on; approvals, audit, lints, fleet
+  defaults and add-on pages about tenants only; the double resolve fixed;
+  `addon-template` an admin's. Its crawl is `tests/api/test_viewer_reads_api.py`.
+- **web**: links and reads by name for a viewer (no `?mce=`, old links
+  too), nothing drawn that is `null`, the Documentation's infrastructure
+  sections an admin's, and the query cache one user's (`lib/query-cache.ts`).
 
 **Next:**
-- **3.57.0 (ADR-0067) is the two workspaces**: Customers and Infrastructure
-  (`/infrastructure`, `/mces`, `/seeds`, Inventory Management, Quick Links,
-  the links out), seeds and KV clusters as kinds (core `cluster_kinds`, the
-  API's `kind` and `zone`; fixtures: `ocp4-prod-seed-site1-az1-a` with two
-  KV clusters), and a viewer never knows of a seed, a KV cluster or an MCE
-  (day1 and day2). A KV cluster's delete needs `confirm=<name>`.
-- **The seed names don't match yet**: the deployed workflows' create-vm finds
-  a seed folder only as `ocp4-seed-<site>-<zone>` and lists every file in it;
-  the convention says `ocp4-<lc>-seed-<site>-<zone>-<id>` (workflows PR #26:
+- Day1's drift reads day2 as a viewer (`system:wingman-day1`): a tenant
+  name two MCEs share is now ambiguous there (its add-ons read as unknown);
+  an admin session would narrow it by `mce`. The team's call.
+- The Documentation's general sections still say what an MCE or the hub is
+  (no deployment's names); rewriting them per audience is left.
+- An approval rollout's counts still count KV clusters; no list names one.
+- The seed names don't match yet: create-vm finds a seed folder only as
+  `ocp4-seed-<site>-<zone>`; the convention says
+  `ocp4-<lc>-seed-<site>-<zone>-<id>` (workflows PR #26:
   `ocp4-<lc>-seed-<site>-<id>`). Wingman reads all three as seeds; the team
   picks one before the first seed folder is merged.
-- Not filtered for a viewer yet (ADR-0067's Consequences): the audit's commit
-  list and diffs, the lints, day2's approvals and audit, an add-on's per-MCE
-  values. Each is a change if the team wants it.
-- The readiness review's items 3 to 14 (`docs/ideas/kubevirt-seed-kv-readiness.md`):
-  reserved names on create, VM pools, zones on nodepools, the capacity
-  policy page.
+- The readiness review's items 3 to 14 (`docs/ideas/kubevirt-seed-kv-readiness.md`).
 - When herzi's retire-used-servers release runs on every MCE: step 6 of
-  `docs/upgrade/3.54-to-3.55.md`, then each cluster's merge request,
-  watching Inventory's list empty. No web button opens that merge request
-  yet (its API is ADR-0065's); the cluster page could own one.
-- The fake fleet has no used Agent or herzi mark to show locally
-  (`fake_mce.py` is at its size ceiling).
-- The user's decisions from the naming audit (3.54.0's PR lists each):
-  the `<id>` letter, the 6-character site, a `test` lifecycle, retiring
-  ADR-0064 (seeds are in Inventory and are day2 destinations since 3.57.0,
-  as MCEs); and the convention's items nothing deployed needs yet.
-- The air-gap: `docs/upgrade/3.52-to-3.53.md`, then 3.53-to-3.54 and
-  3.54-to-3.55's checks, then `docs/upgrade/3.55-to-3.56.md` (3.56.0: every
-  create starts provision-cluster, the orchestrator is required, Wingman's
-  create MR and `DAY1_PROVISIONER` are gone; ADR-0042's 2026-11-23
-  amendment). Its checks stop the upgrade where `day1.provisioner` is not
-  `workflow` yet. Then 3.57.0, generic: viewers lose Inventory Management.
+  `docs/upgrade/3.54-to-3.55.md`, then each cluster's merge request.
+- The air-gap: `docs/upgrade/3.52-to-3.53.md` on to 3.56's guide, then
+  3.57.x and 3.58.0, generic (viewers lose Inventory Management, then every
+  infrastructure name).
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
-- Flavors v2's "Left for later": missing add-ons in one MR per team, the
-  cluster-name prefix in the web, a preview of an unsaved flavor.
-- Tuning: a lock per pool.
+- Flavors v2's "Left for later"; tuning: a lock per pool.
 - Code organisation, later (the user): 23 files left in the size baseline.
-- The team's questions: herzi, RBAC, a shared Git store. Since 3.56.1 a
-  new cluster's name is at most provision-cluster's 24 characters after
-  `ocp4-` (ADR-0014's 2026-11-24 amendment); if production's HostedClusters
-  are `ocp4-<cn>`, the workflows team could raise it to 26.
+- The team's questions: herzi, RBAC, a shared Git store, provision-cluster's
+  24 characters.
