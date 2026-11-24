@@ -1,7 +1,7 @@
 /**
  * The Overview's mocks: a made-up fleet of clusters at two sites, on three
- * OpenShift versions, typed so a shape change fails `tsc`. The capacity and
- * fleet-health cards reuse the Inventory, Segments and Server Scan fixtures.
+ * OpenShift versions, typed so a shape change fails `tsc`. The capacity
+ * cards reuse the Inventory fixture (`fixtures/inventory.ts`).
  */
 
 import type { Page, Route } from "@playwright/test";
