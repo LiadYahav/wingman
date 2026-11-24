@@ -21,6 +21,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
 from wingman_day1.application.inventory import InventoryService
+from wingman_day1.application.kv_clusters import KvClusterService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
@@ -84,6 +85,8 @@ class Day1Context:
     """A cluster's excluded Agent labels MR (ADR-0065); without keys its routes answer 501."""
     platforms: tuple[Platform, ...] = ()
     """segments-manager's and server-scan's own UIs, the sidebar's links out (ADR-0067)."""
+    kv_clusters: KvClusterService | None = None
+    """A new KV cluster on a seed (ADR-0069); ``main`` always builds it."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -202,10 +205,20 @@ def inventory_service(
     return context.inventory
 
 
+def kv_cluster_service(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> KvClusterService:
+    """The KV cluster create (``main`` always builds it; a bare context has none: 501)."""
+    if context.kv_clusters is None:
+        raise FeatureDisabled("Creating a KV cluster is not set up in this deployment.")
+    return context.kv_clusters
+
+
 AgentLabels = Annotated[AgentLabelsService, Depends(agent_labels_service)]
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Inventory = Annotated[InventoryService, Depends(inventory_service)]
+KvClusters = Annotated[KvClusterService, Depends(kv_cluster_service)]
 Nodes = Annotated[NodeService, Depends(node_service)]
 Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]

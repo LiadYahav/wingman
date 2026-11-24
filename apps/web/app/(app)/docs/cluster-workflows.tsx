@@ -4,7 +4,8 @@ import { Callout, InlineCode, SectionHeader } from "./docs-parts";
 /**
  * The docs page's "Cluster Workflows" section, `#cluster-workflows`: the
  * changes that start one of the platform's workflows instead of a merge
- * request (ADR-0042 create, ADR-0038 uninstall, ADR-0055 upgrade, ADR-0062 scale).
+ * request (ADR-0042 create, ADR-0069 a KV cluster's create, ADR-0038 uninstall,
+ * ADR-0055 upgrade, ADR-0062 scale).
  */
 export function ClusterWorkflowsSection() {
   return (
@@ -43,6 +44,14 @@ function ProvisionDocs() {
         once the workflow has opened one (<strong>Review it</strong>), and its error in the workflow&apos;s words. That
         merge request is listed in Approvals with a badge. Only creates go through the workflow: edit, delete, sync and
         import still open Wingman&apos;s merge requests.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        A KV cluster is created from its seed&apos;s card on <strong>Seeds &amp; KV Clusters</strong>, with no form: Wingman
+        fills the whole file, the same as the KV clusters before it (the newest one on the seed gives the owner, the
+        machine configs and the tuning profiles), names it with the lowest free id letter, and starts
+        provision-cluster with the seed as its MCE. You choose only the zone (when the seed&apos;s name gives none), the
+        version, the InfraEnv when the zone has several bare-metal pools, and the workers (3 by default, at most 40).
+        After the merge, install the <InlineCode>vm-lifecycle-worker</InlineCode> add-on on it from its add-ons page.
       </p>
     </>
   );

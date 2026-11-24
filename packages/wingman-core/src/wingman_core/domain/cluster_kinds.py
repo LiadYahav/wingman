@@ -16,7 +16,11 @@ The deployed workflows (team-redbull/workflows ``main`` on 2026-11-23,
 ``shared/cluster_names.py`` and ``activities/vm_lifecycle/day1_repo.py``)
 still name a seed ``ocp4-seed-<site>-<zone>`` and a KV cluster
 ``ocp4-kubevirt-<site>-<zone>…``, and take every file in a seed's folder as
-a KV cluster; both shapes are recognised. Only the reserved word decides the
+a KV cluster; both shapes are recognised. A seed may also be named
+``ocp4-<lc>-mce-seed-<site>-<id>`` (the user, 2026-11-24: no written source
+has it, so it is read as a seed and flagged, ADR-0067's amendment): after
+``mce-seed-`` come at least two segments, so ``ocp4-prod-mce-seed-a`` is
+still a Customer MCE of the site ``seed``. Only the reserved word decides the
 kind; whether the rest of a name follows the convention is the naming
 rules' to say. A folder that is not a seed is a Customer MCE whatever its
 name, and a file that is not a KV cluster is a tenant's.
@@ -34,8 +38,11 @@ LIFECYCLES: Final = ("prod", "prep", "test")
 """The convention's ``<lc>``: the environment a cluster belongs to."""
 
 _LC = "|".join(LIFECYCLES)
-_SEED: Final = re.compile(rf"^ocp4-(?:(?:{_LC})-)?seed(?:-|$)")
-"""``ocp4-<lc>-seed-…`` (the convention) or ``ocp4-seed-…`` (the deployed workflows)."""
+_SEED: Final = re.compile(
+    rf"^ocp4-(?:(?:(?:{_LC})-)?seed(?:-|$)|(?:{_LC})-mce-seed(?:-[a-z0-9]+){{2,}}$)"
+)
+"""``ocp4-<lc>-seed-…`` (the convention), ``ocp4-seed-…`` (the deployed workflows) or
+``ocp4-<lc>-mce-seed-<site>-<id>`` (a name the user expects; ADR-0067's amendment)."""
 _KV: Final = re.compile(rf"^ocp4-(?:(?:(?:{_LC})-)?kv|kubevirt)(?:-|$)")
 """``ocp4-<lc>-kv-…`` (the convention) or ``ocp4-kubevirt-…`` (the deployed workflows)."""
 

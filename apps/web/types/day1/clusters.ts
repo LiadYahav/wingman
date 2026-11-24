@@ -30,6 +30,19 @@ export interface HostedClusterRef {
   namespace: string;
 }
 
+/**
+ * A KV cluster's place in its zone, from its file (ADR-0067's 2026-11-24
+ * amendment): `null` for a tenant's, and for a file that does not parse.
+ */
+export interface KvClusterFacts {
+  /** Its NodePools' `replicas`, summed: the hypervisors it asks for. */
+  workers: number;
+  /** The capacity policy's `maxNodes` (40): create-vm fills it up to this many. */
+  max_workers: number;
+  /** Why create-vm never places a VM on it: its NodePools name no zone, or another one. */
+  zone_problems: string[];
+}
+
 // ── Clusters ────────────────────────────────────────────────────────────────
 
 export type ClusterPhase = "Provisioning" | "Ready" | "Error" | "Deleting" | "Unknown";
@@ -64,6 +77,8 @@ export interface ClusterStatus {
    * A suggestion: the upgrade-cluster workflow plans the path (ADR-0055).
    */
   upgrade_available: string | null;
+  /** A KV cluster's workers and zone check; `null` for a tenant's. */
+  kv?: KvClusterFacts | null;
 }
 
 export interface NodePoolValues {
@@ -163,6 +178,8 @@ export interface ClusterDetail {
   problems: string[];
   /** `null` unless day1's `SEGMENTS_MANAGER_UI_URL` is set. */
   segments_manager: SegmentsManagerLinks | null;
+  /** A KV cluster's workers and zone check; `null` for a tenant's. */
+  kv?: KvClusterFacts | null;
 }
 
 /**

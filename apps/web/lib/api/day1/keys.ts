@@ -21,7 +21,7 @@
  */
 
 import type { PlacementQuery } from "@/lib/placement";
-import type { HardwareChoice } from "@/types";
+import type { HardwareChoice, KvChoices } from "@/types";
 import type { Service } from "./approvals";
 
 const clusters = {
@@ -93,6 +93,11 @@ const fleet = {
   platforms: ["platforms"] as const,
 };
 
+const seeds = {
+  /** A seed's next KV cluster for the dialog's choices (ADR-0069). */
+  kvDraft: (seed: string, choices: KvChoices) => ["seeds", seed, "kv-cluster-draft", choices] as const,
+};
+
 const placement = {
   all: ["placement"] as const,
   query: (query: PlacementQuery | null) => ["placement", query] as const,
@@ -105,6 +110,7 @@ export const day1Keys = {
   audit,
   fleet,
   placement,
+  seeds,
   /** The new-cluster form's name suggestion for `{site, mce, flavor}`. */
   nameSuggestion: (params: Record<string, string> | null) => ["name-suggestion", params] as const,
   /** The flavor editor's cluster-file preview, by the request's JSON. */

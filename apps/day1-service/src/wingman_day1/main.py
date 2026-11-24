@@ -58,15 +58,15 @@ from wingman_day1.application.auth import AuthService
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
+from wingman_day1.application.kv_clusters import KvClusterService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
-from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.rollouts import ROLLOUT_USER, RolloutService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
-from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
+from wingman_day1.compose_hubs import node_service, status_service
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_platforms import platforms
 from wingman_day1.compose_quick_links import quick_links_service
@@ -74,7 +74,6 @@ from wingman_day1.compose_scale import scale_service, scale_workflow
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
-from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.mce_access import load_mce_access
@@ -109,8 +108,6 @@ SERVICE = "day1"
 SERVICE_USER: Final = User(username="system:wingman-day1", role=Role.VIEWER)
 """Who day1 is when it asks day2 for installed addons (a short-lived viewer session)."""
 SERVICE_TOKEN_TTL: Final = timedelta(minutes=5)
-RUNS_TTL_SECONDS: Final = 10.0
-"""The longest an uninstall run's status is cached: the web polls a running one."""
 HUB_TTL_SECONDS: Final = 10.0
 """The longest live status and the nodes view cache an MCE read (ADR-0041)."""
 PLACEMENT_TTL_SECONDS: Final = 5.0
@@ -334,21 +331,16 @@ def build_context(
     hub = _cached_hub(adapters.hub, cache, min(ttl, HUB_TTL_SECONDS))
     # InfraEnvs rarely change: their list is kept longer than live status's reads (ADR-0040)
     infra_env_hub = _cached_hub(adapters.hub, cache, settings.mce_infraenv_cache_seconds)
-    nodes: NodeService | None = None
-    if hub is not None:
-        runs_ttl = min(ttl, RUNS_TTL_SECONDS)
-        nodes = NodeService(
-            hub,
-            cluster_service,
-            inventory=inventory,
-            ui_url=server_scan.server_scan_ui(settings),
-            workflows=(
-                CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)
-                if adapters.uninstall is not None
-                else None
-            ),
-            infraenv_namespace=settings.mce_infraenv_namespace or None,
-        )
+    nodes = node_service(
+        settings,
+        hub,
+        cluster_service,
+        inventory=inventory,
+        uninstall=adapters.uninstall,
+        cache=cache,
+        ttl=ttl,
+    )
+    status = status_service(settings, hub, cluster_service, naming=naming, infra_envs=infra_env_hub)
     network = NetworkService(
         cluster_service, segments_manager.network_ledger(adapters.ledger, cache, ttl=ttl)
     )
@@ -398,17 +390,7 @@ def build_context(
         network=network,
         delete_workflow=adapters.delete_workflow,
         nodes=nodes,
-        status=(
-            StatusService(
-                hub,
-                cluster_service,
-                naming=naming,
-                infraenv_namespace=settings.mce_infraenv_namespace or None,
-                infra_envs=infra_env_hub,
-            )
-            if hub is not None
-            else None
-        ),
+        status=status,
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
         segments_manager_ui_url=segments_manager.segments_manager_ui(settings) or None,
@@ -427,6 +409,17 @@ def build_context(
             cache=cache,
         ),
         platforms=platforms(settings, ledger=adapters.ledger, inventory=adapters.inventory),
+        kv_clusters=KvClusterService(
+            day1,
+            cluster_service,
+            site_catalog,
+            spec_catalog,
+            machine_configs,
+            provision=adapters.provision,
+            naming=naming,
+            owned=owned,
+            hub_infra_envs=status.infra_envs if status is not None else None,
+        ),
     )
 
 

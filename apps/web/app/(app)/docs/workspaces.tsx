@@ -58,10 +58,21 @@ export function WorkspacesSection() {
           a Customer MCE is installed by hand today (the platform&apos;s procedure 12), and nothing in the preview is sent
           or written.
         </Callout>
+        <Callout type="info" title="Each zone's fill order, and the next KV cluster">
+          Seeds &amp; KV Clusters lists a seed&apos;s KV clusters oldest first by id letter, the order create-vm fills them,
+          each with its workers against 40: <strong>Full</strong>, <strong>Filling</strong> (where the zone&apos;s next VMs
+          go) or <strong>Next</strong> (next in line). One whose NodePools do not name its zone is listed apart: create-vm
+          never places a VM on it. A zone with nothing next in line is warned, with a button that creates the next KV
+          cluster at the standby size; <strong>Create KV cluster</strong> on each seed does the same through
+          provision-cluster. Wingman never creates one by itself: growing a zone is the platform&apos;s KV capacity
+          controller&apos;s, once it exists.
+        </Callout>
         <Callout type="tip" title="Names the workflows read today">
           The platform&apos;s workflows still look for a seed named <InlineCode>ocp4-seed-&lt;site&gt;-&lt;zone&gt;</InlineCode>{" "}
           and KV clusters named <InlineCode>ocp4-kubevirt-&lt;site&gt;-&lt;zone&gt;</InlineCode>. Wingman recognises those
-          too, and marks them off-convention; every file in a seed&apos;s folder is a KV cluster, as the workflows list them.
+          too, and a seed named <InlineCode>ocp4-&lt;lc&gt;-mce-seed-&lt;site&gt;-&lt;id&gt;</InlineCode> (whose name gives
+          no zone), and marks them off-convention; every file in a seed&apos;s folder is a KV cluster, as the workflows list
+          them.
         </Callout>
         <Callout type="info" title="Segments Manager and Server Scan">
           The team keeps both apart from Wingman: Infrastructure&apos;s sidebar links to each one&apos;s own UI, in a new

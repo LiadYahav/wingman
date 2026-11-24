@@ -85,6 +85,7 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ["nameSuggestion", day1Keys.nameSuggestion(suggestFor), ["name-suggestion", suggestFor]],
   ["nameSuggestion (none)", day1Keys.nameSuggestion(null), ["name-suggestion", null]],
   ["flavorClusterPreview", day1Keys.flavorClusterPreview('{"name":"x"}'), ["flavor-cluster-preview", '{"name":"x"}']],
+  ["seeds.kvDraft", day1Keys.seeds.kvDraft("ocp4-prod-seed-site1-az1-a", { workers: 3 }), ["seeds", "ocp4-prod-seed-site1-az1-a", "kv-cluster-draft", { workers: 3 }]],
   ["build day1", day1Keys.build("day1"), ["build", "/api/day1/build"]],
   ["build day2", day1Keys.build("day2"), ["build", "/api/day2/build"]],
 ];
