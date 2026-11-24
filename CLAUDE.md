@@ -237,6 +237,8 @@ and write yours here.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later"; tuning: a lock per pool.
-- Code organisation, later (the user): 23 files left in the size baseline.
+- Code organisation (the user's sequence): step 1, the version helper, is
+  done (3.58.1); next is step 2 of `docs/ideas/code-organisation.md`. 23
+  files left in the size baseline.
 - The team's questions: herzi, RBAC, a shared Git store, provision-cluster's
   24 characters.
