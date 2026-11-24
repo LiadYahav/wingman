@@ -14,13 +14,15 @@ import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from wingman_core.domain.cluster_kinds import MceKind, mce_kind
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import RepoPath
 from wingman_day1.application.tree import Day1Tree, read_tree
 from wingman_day1.domain import paths
 from wingman_day1.domain.cluster_file import load_values
 from wingman_day1.domain.errors import InvalidClusterFileError, ResourceNotFoundError
-from wingman_day1.domain.names import MceNaming, describe_mce
+from wingman_day1.domain.kind_names import describe_hub
+from wingman_day1.domain.names import MceNaming
 from wingman_day1.domain.openshift_versions import (
     OpenShiftVersions,
     missing_ladder,
@@ -51,6 +53,11 @@ class MceView:
     def name(self) -> str:
         """The MCE folder name."""
         return self.naming.name
+
+    @property
+    def kind(self) -> MceKind:
+        """A Customer MCE or a seed (ADR-0067); a seed's ``cluster_count`` is its KV clusters."""
+        return mce_kind(self.name)
 
 
 class SiteCatalog:
@@ -128,7 +135,7 @@ class SiteCatalog:
         )
         return MceView(
             site=site,
-            naming=describe_mce(mce, site=site),
+            naming=describe_hub(mce, site=site),
             default_mastertag=default,
             hub_version=hub,
             cluster_count=sum(1 for c in tree.clusters if (c.site, c.mce) == (site, mce)),

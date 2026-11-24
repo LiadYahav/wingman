@@ -100,7 +100,7 @@ async def fleet(
 async def test_a_pool_says_what_is_ready_what_needs_a_fix_and_its_total(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = (await fleet.get("/api/day1/inventory", headers=auth(support.VIEWER))).json()
+    body = (await fleet.get("/api/day1/inventory", headers=auth(support.ALICE))).json()
     site1_a = next(m for m in body["mces"] if m["mce"] == SITE1_A)
     pools = {p["infra_env"]: p for p in site1_a["pools"]}
     r650 = pools[R650]
@@ -119,7 +119,7 @@ async def test_a_pool_says_what_is_ready_what_needs_a_fix_and_its_total(
 async def test_a_pools_servers_come_ready_first_then_needing_a_fix_with_why_then_the_rest(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    found = (await fleet.get(f"{POOL}/candidates", headers=auth(support.VIEWER))).json()
+    found = (await fleet.get(f"{POOL}/candidates", headers=auth(support.ALICE))).json()
     listed = [(c["name"], c["ready"], c["offered"]) for c in found["candidates"]]
     assert listed == [
         (FREE, True, True),

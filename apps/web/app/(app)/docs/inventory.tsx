@@ -25,13 +25,14 @@ const COLUMNS = [
 export function InventorySection() {
   return (
     <section>
-      <SectionHeader id="inventory" icon={Boxes} title="Inventory Management" subtitle="Each MCE's server pools, the add-server runs, and installing servers" />
+      <SectionHeader id="inventory" icon={Boxes} title="Inventory Management" subtitle="Each MCE's server pools, the add-server runs, and installing servers" badge="Admins" />
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         A server reaches a hosted cluster in two steps. The platform&apos;s <InlineCode>add-server-to-mce</InlineCode>{" "}
         workflow makes it an Agent in one of an MCE&apos;s InfraEnv pools (the inventory); then any NodePool on that
         InfraEnv that is short of nodes takes a free Agent, whatever its cluster. herzi, one per MCE hub, starts the same
-        workflow by itself to keep the pools topped up. <strong>Inventory Management</strong>, in the sidebar, shows both:
-        everyone signed in reads it, and only admins install.
+        workflow by itself to keep the pools topped up, so the customers&apos; demand is filled without them.{" "}
+        <strong>Inventory Management</strong>, in the Infrastructure workspace&apos;s sidebar, shows both, for admins
+        only; a seed is a card like any MCE, since herzi fills its pools too.
       </p>
 
       <h3 className="text-base font-semibold mb-3">The pools</h3>
@@ -116,7 +117,7 @@ export function InventorySection() {
         <Callout type="info" title="When Install servers is greyed out">
           Installing needs <InlineCode>DAY1_ADD_SERVERS</InlineCode> on (the chart&apos;s{" "}
           <InlineCode>day1.addServers.enabled</InlineCode>, off by default) and the workflows orchestrator. Without them
-          an admin sees the button greyed out with the reason in its tooltip; a viewer sees no button. The page itself
+          an admin sees the button greyed out with the reason in its tooltip. The page itself
           needs server-scan (<InlineCode>SERVER_SCAN_URL</InlineCode>), or it says{" "}
           <strong>Inventory Management is not set up</strong>.
         </Callout>

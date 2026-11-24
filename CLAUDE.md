@@ -215,6 +215,23 @@ and write yours here.
   size baseline).
 
 **Next:**
+- **3.57.0 (ADR-0067) is the two workspaces**: Customers and Infrastructure
+  (`/infrastructure`, `/mces`, `/seeds`, Inventory Management, Quick Links,
+  the links out), seeds and KV clusters as kinds (core `cluster_kinds`, the
+  API's `kind` and `zone`; fixtures: `ocp4-prod-seed-site1-az1-a` with two
+  KV clusters), and a viewer never knows of a seed, a KV cluster or an MCE
+  (day1 and day2). A KV cluster's delete needs `confirm=<name>`.
+- **The seed names don't match yet**: the deployed workflows' create-vm finds
+  a seed folder only as `ocp4-seed-<site>-<zone>` and lists every file in it;
+  the convention says `ocp4-<lc>-seed-<site>-<zone>-<id>` (workflows PR #26:
+  `ocp4-<lc>-seed-<site>-<id>`). Wingman reads all three as seeds; the team
+  picks one before the first seed folder is merged.
+- Not filtered for a viewer yet (ADR-0067's Consequences): the audit's commit
+  list and diffs, the lints, day2's approvals and audit, an add-on's per-MCE
+  values. Each is a change if the team wants it.
+- The readiness review's items 3 to 14 (`docs/ideas/kubevirt-seed-kv-readiness.md`):
+  reserved names on create, VM pools, zones on nodepools, the capacity
+  policy page.
 - When herzi's retire-used-servers release runs on every MCE: step 6 of
   `docs/upgrade/3.54-to-3.55.md`, then each cluster's merge request,
   watching Inventory's list empty. No web button opens that merge request
@@ -222,15 +239,15 @@ and write yours here.
 - The fake fleet has no used Agent or herzi mark to show locally
   (`fake_mce.py` is at its size ceiling).
 - The user's decisions from the naming audit (3.54.0's PR lists each):
-  the `<id>` letter, the 6-character site, a `test` lifecycle, seeds in
-  Inventory and as day2 destinations, retiring ADR-0064; and the
-  convention's items nothing deployed needs yet.
+  the `<id>` letter, the 6-character site, a `test` lifecycle, retiring
+  ADR-0064 (seeds are in Inventory and are day2 destinations since 3.57.0,
+  as MCEs); and the convention's items nothing deployed needs yet.
 - The air-gap: `docs/upgrade/3.52-to-3.53.md`, then 3.53-to-3.54 and
   3.54-to-3.55's checks, then `docs/upgrade/3.55-to-3.56.md` (3.56.0: every
   create starts provision-cluster, the orchestrator is required, Wingman's
   create MR and `DAY1_PROVISIONER` are gone; ADR-0042's 2026-11-23
   amendment). Its checks stop the upgrade where `day1.provisioner` is not
-  `workflow` yet.
+  `workflow` yet. Then 3.57.0, generic: viewers lose Inventory Management.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the

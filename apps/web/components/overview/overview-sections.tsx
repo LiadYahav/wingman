@@ -1,19 +1,16 @@
 "use client";
 
-import { ClustersBySiteCard } from "./clusters-by-site-card";
-import { FreeServersCard } from "./free-servers-card";
 import { VersionsCard } from "./versions-card";
 
-/** Two columns on a wide screen; a card left alone on its row takes both. */
-const GRID = "grid gap-4 lg:grid-cols-2 lg:[&>*:last-child:nth-child(odd)]:col-span-2";
-
-/** The sections below Cluster Health and Pending Approvals, each reading its own source. */
+/**
+ * The section below Cluster Health and Pending Approvals: the tenants'
+ * OpenShift versions. Where the clusters run and the free servers name the
+ * MCEs, so they are the Infrastructure Overview's (ADR-0067).
+ */
 export function OverviewSections() {
   return (
-    <div className={GRID} data-testid="overview-sections">
-      <ClustersBySiteCard />
+    <div className="grid gap-4" data-testid="overview-sections">
       <VersionsCard />
-      <FreeServersCard />
     </div>
   );
 }

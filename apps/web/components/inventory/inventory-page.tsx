@@ -77,9 +77,9 @@ function RunsSection({ availability }: { availability: Availability }) {
  * installing servers into a pool through
  * the platform's add-server-to-mce workflow, from the header or a pool's row;
  * and its runs, herzi's included. Not a fleet view: a server's record is
- * server-scan's. Everyone signed in reads it; only an admin sees Install
- * servers (day1 refuses anyone else's start), disabled with the reason where
- * installing is off.
+ * server-scan's. An admin's, in the Infrastructure workspace (ADR-0067; the
+ * route mounts it under `AdminsOnly`, and day1 refuses a viewer's reads);
+ * Install servers is disabled with the reason where installing is off.
  */
 export function InventoryPage() {
   const overview = useInventory();

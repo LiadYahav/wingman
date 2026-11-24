@@ -1,7 +1,8 @@
 """``/api/day1/placement``: where a new hosted cluster goes, and why (ADR-0050).
 
-Any signed-in user may ask; creating still needs an admin, and create checks
-the chosen MCE against the same rule. With live status off it still answers,
+Only an admin may ask (``AdminUser``, ADR-0067): its answer is a list of MCEs,
+which a viewer never receives; create checks the chosen MCE against the same
+rule. A seed is never a candidate, by its kind. With live status off it still answers,
 from the day1 repo and server-scan, with the free pods and servers
 ``not_checked`` (ADR-0050's amendment).
 """
@@ -12,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from wingman_core.web.auth import CurrentUser
+from wingman_core.web.auth import AdminUser
 from wingman_day1.api.deps import Placements
 from wingman_day1.api.v1.placement_schemas import PlacementOut
 from wingman_day1.domain.errors import InvalidInputError
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/api/day1/placement", tags=["placement"])
 
 @router.get("")
 async def placement(
-    user: CurrentUser,
+    user: AdminUser,
     placements: Placements,
     site: Annotated[str, Query(min_length=1, max_length=63, description="Site folder")],
     env: Annotated[Env, Query(description="The environment: prod or prep")],

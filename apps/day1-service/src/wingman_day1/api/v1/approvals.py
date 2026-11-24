@@ -26,6 +26,7 @@ from wingman_day1.api.v1.approvals_schemas import (
     UpdateMRIn,
 )
 from wingman_day1.api.v1.schemas import MRDetailOut
+from wingman_day1.api.v1.visible import require_seen_change, seen_changes
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.rollouts import RolloutPreview
 from wingman_day1.domain.rollout import RolloutTrigger
@@ -38,16 +39,24 @@ Iid = Annotated[int, Path(ge=1)]
 
 @router.get("")
 async def list_approvals(context: Context, user: CurrentUser) -> list[MRDetailOut]:
-    """Open Wingman MRs in both projects, whatever branch they target."""
-    return [MRDetailOut.of(change) for change in await context.approvals.pending()]
+    """Open Wingman MRs in both projects, whatever branch they target.
+
+    A viewer's list has none about a KV cluster (ADR-0067).
+    """
+    changes = await seen_changes(context, user, await context.approvals.pending())
+    return [MRDetailOut.of(change) for change in changes]
 
 
 @router.get("/{iid}")
 async def get_approval(
     iid: Iid, context: Context, user: CurrentUser, repo: Repo = RepoKey.DAY1
 ) -> ApprovalDetailOut:
-    """One MR and its diff; ``mr.sha`` is what an approval must name."""
+    """One MR and its diff; ``mr.sha`` is what an approval must name.
+
+    A viewer asking for one about a KV cluster gets a 404 (ADR-0067).
+    """
     change, diffs = await context.approvals.get(repo, iid)
+    await require_seen_change(context, user, change, diffs)
     return ApprovalDetailOut(mr=MRDetailOut.of(change), diffs=[FileDiffOut.of(d) for d in diffs])
 
 

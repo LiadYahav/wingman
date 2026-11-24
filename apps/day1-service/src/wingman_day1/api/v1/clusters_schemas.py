@@ -22,14 +22,19 @@ from wingman_day1.domain.network import segment_of
 from wingman_day1.domain.placement import MAX_REASON
 from wingman_day1.integrations.segments_manager.domain.links import SegmentsManagerLinks
 
+ClusterKindOut = Literal["tenant", "kv"]
+"""A tenant's hosted cluster or a KV cluster on a seed (ADR-0067)."""
+
 
 class NamingOut(BaseModel):
-    """Whether a cluster name follows ``ocp4-<env>-<name>-<site>[-<seq>]``."""
+    """Whether a cluster name follows its kind's pattern (ADR-0014, ADR-0067)."""
 
     follows_convention: bool
     env: str | None
     short_name: str | None
     sequence: str | None
+    zone: str | None
+    """A KV cluster's availability zone; ``None`` for a tenant's."""
     problems: list[str]
 
     @classmethod
@@ -40,6 +45,7 @@ class NamingOut(BaseModel):
             env=naming.env.value if naming.env else None,
             short_name=naming.short_name,
             sequence=naming.sequence,
+            zone=naming.zone,
             problems=list(naming.problems),
         )
 
@@ -85,6 +91,7 @@ class ClusterStatusOut(BaseModel):
     name: str
     site: str
     mce: str
+    kind: ClusterKindOut
     phase: Literal["Provisioning", "Ready", "Error", "Deleting", "Unknown"] = "Unknown"
     spec_name: str | None
     spec_version: str | None
@@ -113,6 +120,7 @@ class ClusterStatusOut(BaseModel):
             name=cluster.ref.name,
             site=cluster.ref.site,
             mce=cluster.ref.mce,
+            kind=cluster.ref.kind.value,
             spec_name=cluster.provenance.spec_name,
             spec_version=cluster.provenance.spec_version,
             created_by=change.author_name if change else None,
@@ -253,6 +261,8 @@ class ClusterDetailOut(BaseModel):
     name: str
     site: str
     mce: str
+    kind: ClusterKindOut
+    """A KV cluster is managed like a tenant's; only its delete asks for its name (ADR-0067)."""
     yaml: str
     gitlab_url: str
     path: str
@@ -281,6 +291,7 @@ def cluster_detail(
         name=cluster.ref.name,
         site=cluster.ref.site,
         mce=cluster.ref.mce,
+        kind=cluster.ref.kind.value,
         yaml=cluster.content,
         gitlab_url=gitlab_url,
         path=str(cluster.ref.path),

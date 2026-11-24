@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from wingman_core.domain.cluster_kinds import HostedClusterKind, hosted_cluster_kind
 from wingman_core.domain.git import RepoPath
 
 SITES: Final = RepoPath("sites")
@@ -78,6 +79,11 @@ class ClusterRef:
     def path(self) -> RepoPath:
         """``sites/<site>/mces/<mce>/hostedClusters/<name>.yaml``."""
         return hosted_clusters_dir(self.site, self.mce).child(f"{self.name}{CLUSTER_SUFFIX}")
+
+    @property
+    def kind(self) -> HostedClusterKind:
+        """A KV cluster (in a seed's folder, or named so) or a tenant's (ADR-0067)."""
+        return hosted_cluster_kind(self.name, mce=self.mce)
 
 
 @dataclass(frozen=True, slots=True)

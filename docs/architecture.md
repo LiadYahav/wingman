@@ -28,7 +28,7 @@ flowchart LR
 | Process | Port | What it does |
 |---|---|---|
 | nginx | 8080 | The one entry point, behind one Route or Ingress (ADR-0058). It splits the paths above, gzips, holds the timeouts and the body size, passes the status stream through, and answers its own `/healthz`. When day1 or day2 cannot answer, it answers a problem with code `DEPENDENCY_UNAVAILABLE` and the status it met; a service's own answers pass through untouched. |
-| web | 3000 | The UI (`apps/web`). Pages run in the browser, which calls `/api/...` by relative paths with TanStack Query. The Next.js server holds no state and never calls the services; `proxy.ts` only redirects on the session cookie (to `/login` without it); the cookie is the session, so `/login` drops a signed-in state the browser kept without it (localStorage `wingman-auth`) instead of going back. |
+| web | 3000 | The UI (`apps/web`), in two workspaces: Customers, the tenants' side and all a viewer has, and Infrastructure, an admin's (ADR-0067). Pages run in the browser, which calls `/api/...` by relative paths with TanStack Query. The Next.js server holds no state and never calls the services; `proxy.ts` only redirects on the session cookie (to `/login` without it); the cookie is the session, so `/login` drops a signed-in state the browser kept without it (localStorage `wingman-auth`) instead of going back. |
 | day1 | 8001 | `wingman_day1`: hosted clusters, flavors (the specs project), sites and MCEs (read only, ADR-0018), approvals and audit of the day1 and specs projects, login, and every platform system below. |
 | day2 | 8002 | `wingman_day2`: add-ons on the hub, MCEs, hosted and UPI clusters (ADR-0020), through the team projects in the sigs group; it reads the day1 project, never writes it. |
 
@@ -79,8 +79,8 @@ default.
 | Argo CD | none | none | Nothing: Argo CD reads the merged files and applies them. Each MCE's ApplicationSet makes one Application per cluster file in `hostedClusters/`, rendered by the hostedclusters-setup chart; day2's ApplicationSets find the team repos' folders. Quick Links only links to each Argo CD (ADR-0052). |
 | MCE hubs (Kubernetes API) | `hub_api.py` (ADR-0019; its objects parsed in `hub_objects.py`), a token per hub from `MCE_TOKENS_FILE`, an address by `MCE_API_DOMAIN` or per hub (ADR-0045) | `CLUSTER_STATUS_ENABLED` | Read only: HostedClusters, NodePools and InfraEnvs (live status), each cluster's Machines and Agents (the Nodes tab, ADR-0038), the hub's nodes and pods (MCE placement, ADR-0050). |
 | OpenShift OAuth | `openshift_oauth.py` | the OpenShift OAuth settings, or dev login | Login only (below). |
-| server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN` | Read only, with the viewer token: its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050) and Inventory Management's pools (ADR-0057); a node's server links to its page in server-scan's own UI, and an admin's top bar to that UI. Never `/servers/available` or a reservation: those are the workflows'. The version Wingman matches and how to sync: [integrations/server-scan.md](integrations/server-scan.md). |
-| segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, one open GET: a cluster's EPG checked against its file (ADR-0039); the cluster page and an admin's top bar link to its own UI. The commit Wingman matches and how to sync: [integrations/segments-manager.md](integrations/segments-manager.md). |
+| server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN` | Read only, with the viewer token: its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050) and Inventory Management's pools (ADR-0057); a node's server links to its page in server-scan's own UI, and the Infrastructure workspace's sidebar to that UI (ADR-0067). Never `/servers/available` or a reservation: those are the workflows'. The version Wingman matches and how to sync: [integrations/server-scan.md](integrations/server-scan.md). |
+| segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, one open GET: a cluster's EPG checked against its file (ADR-0039); the cluster page and the Infrastructure workspace's sidebar link to its own UI. The commit Wingman matches and how to sync: [integrations/segments-manager.md](integrations/segments-manager.md). |
 | workflows orchestrator | one adapter per workflow: `workflows_api.py`, `provision_workflow.py`, `upgrade_workflow.py`, `add_server_workflow.py`, `scale_workflow.py` | `WORKFLOWS_API_URL` (required), plus each workflow's own switch (next table) | Starts a run and shows it in the workflow's words; never re-implements its procedure, checks or phases. The orchestrator has no auth (accepted); day1 lets only admins start a run and logs who did. |
 | cluster-navigator | none | none | Not wired. Its data on the cluster page is planned (`docs/ideas/single-pane.md`, workstream 5). |
 | herzi | none | none | No adapter: its add-server runs are in the orchestrator's run list, which Inventory Management shows (ADR-0057). |
@@ -122,9 +122,13 @@ orchestrator and segments-manager with fakes seeded from `dev/fleet-fixtures/`
 5. The web keeps it in a cookie and sends it as `Authorization: Bearer` on
    every call. Routes take `CurrentUser` (reads) or `AdminUser` (writes) from
    `wingman_core.web.auth`; a few reads are for admins only (Quick Links, the
-   top bar's platform links), and so is a cluster's nodes, the servers it runs
-   on: a viewer's scale and upgrade runs leave them out too (ADR-0038). Nobody
-   approves their own change (`403 SELF_APPROVAL`).
+   platform links), and so is a cluster's nodes, the servers it runs on: a
+   viewer's scale and upgrade runs leave them out too (ADR-0038). A viewer
+   never knows of a seed, a KV cluster or an MCE (ADR-0067): the sites and
+   MCEs, placement and Inventory Management are admins' reads, a KV cluster
+   is a missing cluster for a viewer and every list leaves it out, in day1
+   and day2 alike (`domain/visibility.py` in each). Nobody approves their own
+   change (`403 SELF_APPROVAL`).
 
 Locally, `DEV_AUTH_ENABLED` with a `DEV_AUTH_SECRET` of 32 or more characters
 replaces OpenShift (`POST /api/auth/dev-login`); settings refuse a weak secret.

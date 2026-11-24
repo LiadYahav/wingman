@@ -1,7 +1,7 @@
 # ADR-0066: segments-manager and server-scan stay apart from Wingman: the top bar links to their own UIs, and Wingman rebuilds neither
 
 Date: 2026-11-23
-Status: Accepted (supersedes ADR-0047 and ADR-0048)
+Status: Accepted (supersedes ADR-0047 and ADR-0048); amended by ADR-0067 (2026-11-23: the links out are in the Infrastructure workspace's sidebar, and the top bar switches workspaces)
 
 ## Context
 
@@ -88,3 +88,24 @@ and reads only what its own features need.
   the top bar's links out, nothing in Wingman leading to an area, a viewer's
   top bar; `cluster-nodes.spec.ts` and `cluster-network.spec.ts` the links to
   each system's own page.
+
+## Amendment (2026-11-23, by ADR-0067): the links out move to Infrastructure's sidebar
+
+The user (2026-11-23): "The top bar replace the server scanner and ss with
+them please", them being the two workspaces, Customers and Infrastructure.
+
+- **The top bar is the switch between the workspaces**, for admins: Customers
+  and Infrastructure, each going to its home. It no longer links out, and
+  "Wingman, then Segments and Server Scan" above no longer holds.
+- **The links to segments-manager's and server-scan's own UIs are in the
+  Infrastructure workspace's sidebar**, under Tools after Quick Links, each
+  opening in a new tab and marked as leaving Wingman (a trailing arrow, "opens
+  in a new tab" in its name, the same in the icon rail's tooltip). They come
+  from `GET /api/day1/platforms` as before, which stays an admin's read; a
+  viewer has no Infrastructure workspace, so no link out, and never asks.
+- **Unchanged**: a node's server opens its page in server-scan, the cluster
+  card opens segments-manager's UI, and what day1 reads of either system.
+
+Verification: `apps/web/lib/platforms.test.ts` (`linksOut`) and
+`apps/web/e2e/tests/platforms-apart.spec.ts` (the sidebar's links out, none in
+the top bar or the Customers sidebar, a viewer's none and no read).

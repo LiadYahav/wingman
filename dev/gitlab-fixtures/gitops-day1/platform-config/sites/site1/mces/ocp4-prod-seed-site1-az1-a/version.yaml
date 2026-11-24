@@ -1,0 +1,3 @@
+# The OCP version of the seed hub ITSELF, as an MCE's version.yaml (day2 reads it).
+# THIS FILE MUST CARRY `mastertag` AND NOTHING ELSE.
+mastertag: 4.18.22-x86_64

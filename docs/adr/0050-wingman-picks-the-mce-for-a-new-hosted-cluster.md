@@ -1,7 +1,7 @@
 # ADR-0050: Wingman picks the MCE for a new hosted cluster, and shows why
 
 Date: 2026-11-12
-Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment); amended 2026-11-23: herzi's used Agents are no free servers; amended by ADR-0042 (2026-11-23: there is no create merge request, so rule 11's description section is gone and the record is the `mce_placement_chosen` log line and the metric; open creates are the provision-cluster workflow's merge requests)
+Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment); amended 2026-11-23: herzi's used Agents are no free servers; amended by ADR-0042 (2026-11-23: there is no create merge request, so rule 11's description section is gone and the record is the `mce_placement_chosen` log line and the metric; open creates are the provision-cluster workflow's merge requests); amended by ADR-0067 (2026-11-23): a seed is never a candidate, by its kind, and placement is an admin's read
 
 **The free pods rule** (the user, 2026-11-12): free = allocatable pods − pods
 in use, on the worker nodes only, and it must be at least the cost of one
@@ -361,3 +361,25 @@ Verification: `apps/day1-service/tests/unit/domain/test_used_agents.py`
 without server-scan, another key when the setting names it) and
 `apps/day1-service/tests/api/test_used_agents_api.py` (the read with
 herzi's label, and with the setting's key).
+
+## Amendment (2026-11-23, by ADR-0067): a seed is never a candidate, by its kind
+
+A seed is an MCE-level folder of day1 that hosts one zone's KV clusters
+(`ocp4-<lc>-seed-<site>-<zone>-<id>`, or the deployed workflows'
+`ocp4-seed-<site>-<zone>`). Until now placement left it out only because its
+name gives no env.
+
+- **Candidates are the site's Customer MCEs** (`mce_kind`, ADR-0067) whose
+  name gives the env, so a seed is left out by what it is, whatever its name
+  says.
+- **A create whose MCE is a seed is refused by its kind** in placement's
+  admission: "'<seed>' is a seed: it hosts KV clusters, never a tenant's
+  cluster (ADR-0067)" (`422`).
+- **`GET /api/day1/placement` is an admin's read** (`AdminUser`): its answer
+  is a list of MCEs, which a viewer never receives. Create was an admin's
+  already, so the form is unchanged.
+
+Verification: `apps/day1-service/tests/api/test_cluster_kinds_api.py`
+(`test_placement_never_offers_a_seed`,
+`test_a_create_on_a_seed_is_refused_by_its_kind`); the placement tests read
+as an admin.

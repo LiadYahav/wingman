@@ -77,10 +77,12 @@ class MceNaming:
     env: Env | None
     letter: str | None
     problems: tuple[str, ...]
+    zone: str | None = None
+    """A seed's availability zone (ADR-0067); a Customer MCE has none."""
 
     @property
     def follows_convention(self) -> bool:
-        """Whether the name is ``ocp4-<env>-mce-<site>-<letter>`` for its own site."""
+        """Whether the name follows its kind's pattern for its own site (``kind_names.py``)."""
         return not self.problems
 
 
@@ -109,10 +111,12 @@ class ClusterNaming:
     short_name: str | None
     sequence: str | None
     problems: tuple[str, ...]
+    zone: str | None = None
+    """A KV cluster's availability zone (ADR-0067); a tenant's cluster has none."""
 
     @property
     def follows_convention(self) -> bool:
-        """Whether the stem is ``ocp4-<env>-<name>-<site>[-<seq>]`` for its own site."""
+        """Whether the stem follows its kind's pattern for its own site (``kind_names.py``)."""
         return not self.problems
 
 

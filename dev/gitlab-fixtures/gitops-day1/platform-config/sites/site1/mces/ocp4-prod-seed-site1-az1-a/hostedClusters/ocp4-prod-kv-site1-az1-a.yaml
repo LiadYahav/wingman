@@ -1,0 +1,21 @@
+# Placeholder data for Wingman's tests: a KV cluster (ADR-0067), the platform's
+# own hosted cluster on site1's az1 seed, named ocp4-<lc>-kv-<site>-<zone>-<id>.
+# Its workers are bare-metal hypervisors on which create-vm builds the tenants'
+# VM workers, so deleting it takes those VMs with it.
+owner:
+  merkaz: "1000"
+  anaf: "10"
+  mador: "1"
+
+mastertag: 4.18.22-x86_64
+
+nodepool:
+- infraEnvName: r760-mtl-az1
+  replicas: 2
+  labels:
+    allowDeletion: false
+  configs:
+  - name: workers-chrony-configuration
+  - name: kubevirt-worker-tuning
+  nodeLabels:
+    topology.kubernetes.io/zone: az1

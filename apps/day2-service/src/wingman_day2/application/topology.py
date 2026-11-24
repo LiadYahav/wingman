@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from wingman_core.domain.users import User
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ClusterKind, ClusterRef, env_from_name
 from wingman_day2.domain.day1 import Day1Index
@@ -25,6 +26,7 @@ from wingman_day2.domain.findings import Finding, Rule, warning
 from wingman_day2.domain.lints import lint_team, position_conflicts
 from wingman_day2.domain.platform import Destination, TeamPlan, discover, plan_team
 from wingman_day2.domain.teams import Team, TeamRepo, control_files
+from wingman_day2.domain.visibility import sees_destination
 from wingman_day2.ports import Day1Repository, SigsRepository
 
 
@@ -73,6 +75,13 @@ class Topology:
         raise UnknownClusterError(
             f"no cluster {ref.id} in day1 or any team repo", details={"cluster": ref.id}
         )
+
+    def visible_to(self, user: User) -> Topology:
+        """The topology ``user`` may know of: a viewer's has no MCE, seed or KV cluster."""
+        if user.is_admin:
+            return self
+        shown = tuple(s for s in self.clusters if sees_destination(user, s.ref))
+        return replace(self, clusters=shown)
 
     def resolve(self, key: str, *, mce: str | None = None) -> ClusterSummary:
         """The cluster ``key`` names: a cluster id, or a bare name that is unique.

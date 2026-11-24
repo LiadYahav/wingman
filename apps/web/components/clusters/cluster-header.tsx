@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Edit2, ExternalLink, Eye, Package, Trash2, X } from "lucide-react";
+import { ArrowLeft, Edit2, ExternalLink, Eye, Package, Sprout, Trash2, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { updateOf } from "@/components/clusters/cluster-drift";
 import { chartsHref } from "@/lib/day2";
+import { isKvCluster } from "@/lib/workspaces";
 import type { ClusterDetail, ClusterDrift } from "@/types";
 
 /** What an admin does from the header: edit the file (then cancel or review it), or delete the cluster. */
@@ -68,9 +69,15 @@ export function ClusterHeader({ name, mce, loading = false, cluster, drift, isAd
   isAdmin?: boolean;
   actions?: ClusterHeaderActions;
 }) {
+  // A KV cluster's page is the Infrastructure workspace's (ADR-0067): back to the seeds
+  const kv = cluster ? isKvCluster(cluster) : false;
   return (
     <div className="flex items-start gap-3 flex-wrap">
-      <Link href="/clusters" className={buttonVariants({ variant: "ghost", size: "icon" })}>
+      <Link
+        href={kv ? "/seeds" : "/clusters"}
+        aria-label={kv ? "Back to Seeds & KV Clusters" : "Back to Clusters"}
+        className={buttonVariants({ variant: "ghost", size: "icon" })}
+      >
         <ArrowLeft className="h-4 w-4" />
       </Link>
       <div className="flex-1 min-w-0">
@@ -79,6 +86,15 @@ export function ClusterHeader({ name, mce, loading = false, cluster, drift, isAd
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight break-all">{name}</h1>
+            {kv && (
+              <span
+                data-testid="kv-cluster-badge"
+                title="A KV cluster on a seed: its workers host the tenants' VMs"
+                className="inline-flex items-center gap-1 rounded-full bg-status-ready/12 px-2 py-0.5 text-xs font-medium text-status-ready-fg"
+              >
+                <Sprout aria-hidden className="h-3 w-3" />KV cluster{cluster?.naming.zone ? ` · ${cluster.naming.zone}` : ""}
+              </span>
+            )}
             {drift && drift.state !== "not_linked" && <FlavorStateBadge row={{ ...drift, update: updateOf(drift) }} />}
           </div>
         )}

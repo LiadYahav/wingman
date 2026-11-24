@@ -13,7 +13,7 @@ const COLORS = {
   red: { icon: "text-status-error", bg: "bg-status-error/15", value: "text-status-error-fg" },
 };
 
-function StatCard({
+export function StatCard({
   title, value, hint, icon: Icon, href, loading, color = "blue",
 }: {
   title: string; value: number | undefined; hint?: string; icon: React.ElementType;

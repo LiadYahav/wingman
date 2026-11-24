@@ -46,7 +46,7 @@ async def test_every_status_route_is_501_when_status_is_off(
 ) -> None:
     transport = httpx.ASGITransport(app=disabled)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        response = await client.request(method, path, json=body, headers=auth(support.VIEWER))
+        response = await client.request(method, path, json=body, headers=auth(support.ALICE))
     assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
     assert response.headers["content-type"] == "application/problem+json"
 
@@ -139,7 +139,7 @@ async def test_many_open_pages_share_one_read_of_the_hub(
 async def test_infraenvs_list_and_an_unconfigured_mce(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    headers = auth(support.VIEWER)
+    headers = auth(support.ALICE)
     listed = await client.get(f"/api/day1/mces/{MCE}/infraenvs", headers=headers)
     assert listed.json() == ["dell-r660-site1-128c-1024gb-5tb"]
     unconfigured = await client.get(

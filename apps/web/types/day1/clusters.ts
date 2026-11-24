@@ -2,14 +2,26 @@ import type { PlacementChoice } from "./placement";
 
 // ── Naming and the HostedCluster a file renders ─────────────────────────────
 
-/** Whether a name follows `ocp4-<env>-<name>-<site>[-<seq>]` (ADR-0014). */
+/**
+ * Whether a name follows its kind's pattern (ADR-0014, ADR-0067): a tenant's
+ * `ocp4-<env>-<name>-<site>[-<seq>]`, a KV cluster's `ocp4-<lc>-kv-<site>-<zone>-<id>`.
+ */
 export interface ClusterNaming {
   follows_convention: boolean;
   env: string | null;
   short_name: string | null;
   sequence: string | null;
+  /** A KV cluster's availability zone; `null` for a tenant's. */
+  zone?: string | null;
   problems: string[];
 }
+
+/**
+ * A tenant's hosted cluster, or a KV cluster on a seed whose workers host the
+ * tenants' VMs (ADR-0067). day1 always sends it; a row without one is read as
+ * a tenant's. A viewer never receives a KV cluster.
+ */
+export type ClusterKind = "tenant" | "kv";
 
 /** What the chart renders: `ocp4-<clusterName>` in `hcp-<clusterName>` (ADR-0015). */
 export interface HostedClusterRef {
@@ -27,6 +39,7 @@ export interface ClusterStatus {
   name: string;
   site: string;
   mce: string;
+  kind?: ClusterKind;
   /** Always `Unknown`: live state comes from the status endpoints. */
   phase: ClusterPhase;
   /** `null` when the cluster is not linked to a spec. */
@@ -131,6 +144,8 @@ export interface ClusterDetail {
   name: string;
   site: string;
   mce: string;
+  /** A KV cluster is managed like a tenant's; only its delete asks for its name (ADR-0067). */
+  kind?: ClusterKind;
   yaml: string;
   gitlab_url: string;
   path: string;

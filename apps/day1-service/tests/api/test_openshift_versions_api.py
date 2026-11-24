@@ -34,7 +34,7 @@ async def remove(gitlab: InMemoryGitLab, support: Any, path: str) -> None:
 
 async def versions(client: httpx.AsyncClient, auth: Auth, support: Any, mce: str) -> Any:
     response = await client.get(
-        f"/api/day1/mces/{mce}/openshift-versions", headers=auth(support.VIEWER)
+        f"/api/day1/mces/{mce}/openshift-versions", headers=auth(support.ALICE)
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -96,7 +96,7 @@ async def test_an_mce_that_exists_nowhere_is_not_found(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     response = await client.get(
-        "/api/day1/mces/ocp4-prod-mce-site9-z/openshift-versions", headers=auth(support.VIEWER)
+        "/api/day1/mces/ocp4-prod-mce-site9-z/openshift-versions", headers=auth(support.ALICE)
     )
     assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
 

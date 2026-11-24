@@ -11,6 +11,7 @@ from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.api.deps import Context
 from wingman_day1.api.v1.audit_schemas import CommitRecordOut
 from wingman_day1.api.v1.schemas import MRDetailOut
+from wingman_day1.api.v1.visible import seen_changes
 from wingman_day1.application.approvals import Change, RepoKey
 
 router = APIRouter(prefix="/api/day1/audit", tags=["audit"])
@@ -33,11 +34,13 @@ async def list_commits(
 async def list_merge_requests(
     context: Context, user: CurrentUser, per_page: PerPage = 50, page: Page = 1
 ) -> list[MRDetailOut]:
-    """Newest MRs in both projects, any state; each says which repo it is from."""
-    return [
-        MRDetailOut.of(Change(item.repo, item.change))
-        for item in await context.audit.merge_requests(per_page=per_page, page=page)
-    ]
+    """Newest MRs in both projects, any state; each says which repo it is from.
+
+    A viewer's page leaves out those about a KV cluster (ADR-0067), so it may be shorter.
+    """
+    items = await context.audit.merge_requests(per_page=per_page, page=page)
+    changes = await seen_changes(context, user, [Change(i.repo, i.change) for i in items])
+    return [MRDetailOut.of(change) for change in changes]
 
 
 @router.get("/commits/{repo}/{sha}/diff")

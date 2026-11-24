@@ -121,6 +121,19 @@ hubs:
       - {name: master-2, role: control-plane, pods: 106}
       - {name: worker-0, pods: 170}
       - {name: worker-1, pods: 160}
+  # A seed (ADR-0067): zone az1's KV clusters run here. Lots of room and a free
+  # Agent, so placement passing it over shows it is skipped by kind, not by numbers.
+  ocp4-prod-seed-site1-az1-a:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 80}
+      - {name: master-1, role: control-plane, pods: 82}
+      - {name: master-2, role: control-plane, pods: 81}
+      - {name: worker-0, pods: 20}
+      - {name: worker-1, pods: 25}
+      - {name: worker-2, pods: 22}
+    infra_envs:
+      r760-mtl-az1:
+        {redbull.io/flavor: r760, redbull.io/size: mtl, redbull.io/site: site1, topology.kubernetes.io/zone: az1}
 
 clusters:
   # Git moved the cluster to 4.18.22: the control plane is there, and one
@@ -192,6 +205,20 @@ clusters:
           - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0401}
           - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0402}
 
+  # A KV cluster on the az1 seed (ADR-0067): two bare-metal hypervisors, managed
+  # like any hosted cluster (Scale, uninstall, upgrade); only its delete differs.
+  - name: ocp4-prod-kv-site1-az1-a
+    mce: ocp4-prod-seed-site1-az1-a
+    version: 4.18.22
+    node_pools:
+      - infra_env: r760-mtl-az1
+        upgrade: InPlace
+        replicas: 2
+        version: 4.18.22
+        nodes:
+          - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0901}
+          - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0902}
+
   # The other fixture clusters: on their MCE, with no NodePools.
   - {name: ocp4-prod-heron-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
   - {name: ocp4-prod-karniol-site1, mce: ocp4-prod-mce-site1-a, version: 4.16.27}
@@ -203,3 +230,4 @@ clusters:
   - {name: ocp4-prep-kite-site2, mce: ocp4-prep-mce-site2-a, version: 4.19.10}
   - {name: ocp4-prep-wren-site2, mce: ocp4-prep-mce-site2-a, version: 4.19.10}
   - {name: ocp4-prod-didush-site2-a, mce: ocp4-prod-mce-site2-a, version: 4.16.27}
+  - {name: ocp4-prod-kv-site1-az1-b, mce: ocp4-prod-seed-site1-az1-a, version: 4.17.58}

@@ -55,8 +55,8 @@ export function OverviewSection() {
         />
         <FeatureCard
           icon={Server}
-          title="Servers and Segments"
-          description="Inventory Management counts each MCE's free servers, for everyone. segments-manager and server-scan live in their own UIs, apart from Wingman: an admin's top bar links to each, in a new tab."
+          title="Two Workspaces"
+          description="Customers for the tenants' clusters, flavors and add-ons; Infrastructure, for admins, for the Customer MCEs, the seeds and their KV clusters, Inventory Management, and links to segments-manager's and server-scan's own UIs."
         />
       </div>
 

@@ -31,6 +31,7 @@ import {
   type DriftFilter, type GroupBy, type SortDir, type SortField,
 } from "@/components/clusters/list/model";
 import { day2Api, day2Keys } from "@/lib/day2";
+import { tenantClusters } from "@/lib/workspaces";
 import type { CatalogEntry, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -51,10 +52,12 @@ export default function ClustersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { data: clusters, isLoading, isFetching, error } = useQuery<ClusterStatus[]>({
+  // The customers' clusters: an admin's KV clusters are on Seeds & KV Clusters (ADR-0067)
+  const { data: clusters, isLoading, isFetching, error } = useQuery<ClusterStatus[], Error, ClusterStatus[]>({
     queryKey: day1Keys.clusters.all,
     queryFn: day1Api.clusters.list,
     staleTime: 30_000,
+    select: tenantClusters,
   });
 
   const { data: liveStatuses, isLoading: statusLoading, isError: statusFailed } = useBulkStatus(clusters);

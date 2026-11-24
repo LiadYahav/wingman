@@ -5,7 +5,7 @@ Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live statu
 2026-11-16 (3.38.0: Ready and Needs fix, a pool's total, collapsing an MCE, installing a
 server with its health checks waived); amended 2026-11-23 (3.54.0: a pool's servers are named by
 its InfraEnv's agentLabels); amended 2026-11-23 (3.55.0: herzi's used Agents apart, and the
-NodePools that do not exclude its label)
+NodePools that do not exclude its label); amended by ADR-0067 (2026-11-23: admins only, in the Infrastructure workspace)
 
 ## Context
 
@@ -485,3 +485,22 @@ Go's times, a recovered or malformed state, the adapter's parse);
 with the setting's, the unguarded nodepools, no live status, a pool's
 marks); `apps/web/lib/inventory/used.test.ts` and `herzi.test.ts` (Vitest)
 and `apps/web/e2e/tests/inventory-used.spec.ts`.
+
+## Amendment (2026-11-23, by ADR-0067): admins only
+
+The user (2026-11-23): "In addition to inventory management — Herzi keep the
+place of the customers and filling their request." herzi fills the
+customers' demand, so customers do not manage inventory, and the pools name
+the MCEs, which a viewer never knows of.
+
+- **Every read is an admin's** (`AdminUser`): `GET /api/day1/inventory`,
+  `/inventory/runs` and a pool's `/candidates` answer a viewer `403
+  FORBIDDEN`, before server-scan or the orchestrator is asked. "Everyone
+  signed in reads it" above no longer holds; adding was an admin's already.
+- **The page moves to the Infrastructure workspace** (ADR-0067), with the
+  MCEs and seeds; a viewer has no entry for it, and `/inventory` shows a
+  viewer what any admins-only page does.
+- A seed is a card like any MCE: herzi fills its pools too.
+
+Verification: `apps/day1-service/tests/api/test_inventory_api.py`
+(`test_only_admins_read_and_add`).

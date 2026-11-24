@@ -19,7 +19,7 @@ import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
 import { ClusterHeader } from "@/components/clusters/cluster-header";
 import { FixAddonDialog } from "@/components/clusters/fix-addon-dialog";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
-import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
+import { DeleteClusterDialog } from "@/components/clusters/delete-cluster-dialog";
 import { ClusterNodes } from "@/components/clusters/cluster-nodes";
 import { CommitList, type CommitEntry } from "@/components/clusters/commit-list";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
@@ -213,7 +213,7 @@ function ClusterDetailContent() {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: () => day1Api.clusters.remove(name, where, cluster!.last_commit_id),
+    mutationFn: (confirm: string) => day1Api.clusters.remove(name, where, cluster!.last_commit_id, confirm),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Delete MR");
       setDeleteReviewOpen(false);
@@ -446,23 +446,18 @@ function ClusterDetailContent() {
         size="xl"
       />
 
-      <ReviewDialog
+      <DeleteClusterDialog
         open={deleteReviewOpen}
         onOpenChange={setDeleteReviewOpen}
-        title={`Review: Delete Cluster "${name}"`}
-        description="This opens a GitLab MR that removes the cluster file. The change requires approval before merging."
-        onConfirm={() => deleteMutation.mutate()}
+        name={name}
+        site={site}
+        mce={mce}
+        where={where}
+        cluster={cluster}
+        isAdmin={isAdmin}
         isPending={deleteMutation.isPending}
-        confirmLabel="Confirm — Delete Cluster MR"
-        confirmVariant="destructive"
-      >
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm space-y-1">
-          <p className="break-words">Deleting cluster <strong>{name}</strong> from site <strong>{site}</strong> / MCE <strong>{mce}</strong>.</p>
-          {cluster && <p className="font-mono text-xs text-muted-foreground break-all">{cluster.path}</p>}
-          <p className="text-muted-foreground text-xs">Once merged, ArgoCD removes the HostedCluster. The network segment is not released: that is the delete-cluster workflow&apos;s job.</p>
-        </div>
-        <DeleteWorkflowPanel name={name} where={where} isAdmin={isAdmin} />
-      </ReviewDialog>
+        onConfirm={(confirm) => deleteMutation.mutate(confirm)}
+      />
 
       {syncOpen && (
         <SyncDialog

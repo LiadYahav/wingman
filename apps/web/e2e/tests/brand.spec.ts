@@ -20,7 +20,7 @@ test.describe("Wingman's chrome", () => {
     await go(page, "/clusters");
     await expect(brand(page)).toHaveAttribute("href", "/");
     await expect(brand(page).getByRole("img", { name: "Wingman" })).toBeVisible();
-    for (const name of ["Dashboard", "Clusters", "Flavors", "Addons", "Quick Links", "Approvals", "Audit", "Lints", "Documentation", "Settings"]) {
+    for (const name of ["Dashboard", "Clusters", "Flavors", "Addons", "Approvals", "Audit", "Lints", "Documentation", "Settings"]) {
       await expect(wingmanNav(page).getByRole("link", { name, exact: true })).toBeVisible();
     }
     await brand(page).click();

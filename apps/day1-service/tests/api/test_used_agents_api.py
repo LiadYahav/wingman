@@ -129,7 +129,7 @@ async def dell_on_a(client: httpx.AsyncClient, headers: dict[str, str]) -> dict[
 async def test_placement_counts_herzis_used_agents_as_no_free_server(
     day1: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    dell = await dell_on_a(day1, auth(support.VIEWER))
+    dell = await dell_on_a(day1, auth(support.ALICE))
     assert (dell["free_agents"], dell["healthy"], dell["used"]) == (2, 2, 1)
     assert dell["detail"] == (
         f"{DELL}: 2 healthy free of 2 needed; 1 used, left out (herzi removes it)"
@@ -141,7 +141,7 @@ async def test_with_the_setting_its_keys_mark_the_used_agents_not_herzis(
 ) -> None:
     app = app_of(support, gitlab, clock, DAY1_EXCLUDED_AGENT_LABELS=OTHER)
     async for client in serve(app):
-        dell = await dell_on_a(client, auth(support.VIEWER))
+        dell = await dell_on_a(client, auth(support.ALICE))
         assert (dell["free_agents"], dell["used"]) == (2, 1), "s2 counts, s3 does not"
 
 
@@ -157,7 +157,7 @@ async def inventory(client: httpx.AsyncClient, headers: dict[str, str]) -> dict[
 async def test_inventory_shows_the_used_agents_apart_and_never_as_available(
     day1: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = await inventory(day1, auth(support.VIEWER))
+    body = await inventory(day1, auth(support.ALICE))
     assert body["used_labels"] == {"keys": [HERZI_LABEL], "source": "herzi"}
     site1_a = next(m for m in body["mces"] if m["mce"] == A)
     assert (site1_a["used"], site1_a["used_error"]) == (1, None)
@@ -170,7 +170,7 @@ async def test_inventory_shows_the_used_agents_apart_and_never_as_available(
 async def test_inventory_lists_the_nodepools_that_do_not_exclude_the_label(
     day1: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = await inventory(day1, auth(support.VIEWER))
+    body = await inventory(day1, auth(support.ALICE))
     site1_a = next(m for m in body["mces"] if m["mce"] == A)
     found = {(u["cluster"], u["nodepool"]) for u in site1_a["unguarded"]}
     assert found == {
@@ -187,7 +187,7 @@ async def test_with_the_setting_inventory_names_its_keys(
 ) -> None:
     app = app_of(support, gitlab, clock, DAY1_EXCLUDED_AGENT_LABELS=OTHER)
     async for client in serve(app):
-        body = await inventory(client, auth(support.VIEWER))
+        body = await inventory(client, auth(support.ALICE))
         assert body["used_labels"] == {"keys": [OTHER], "source": "setting"}
         site1_a = next(m for m in body["mces"] if m["mce"] == A)
         dell = next(p for p in site1_a["pools"] if p["infra_env"] == DELL)
@@ -198,7 +198,7 @@ async def test_without_live_status_the_used_agents_are_unknown(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
     async for client in serve(app_of(support, gitlab, clock, live=False)):
-        body = await inventory(client, auth(support.VIEWER))
+        body = await inventory(client, auth(support.ALICE))
         site1_a = next(m for m in body["mces"] if m["mce"] == A)
         assert (site1_a["used"], site1_a["used_error"], site1_a["available"]) == (None, None, 4)
         assert site1_a["unguarded"], "the cluster files are read without live status"
@@ -207,7 +207,7 @@ async def test_without_live_status_the_used_agents_are_unknown(
 async def test_a_pool_carries_herzis_marks_on_its_infraenv(
     day1: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = await inventory(day1, auth(support.VIEWER))
+    body = await inventory(day1, auth(support.ALICE))
     site1_a = next(m for m in body["mces"] if m["mce"] == A)
     dell = next(p for p in site1_a["pools"] if p["infra_env"] == DELL)
     assert dell["herzi"] == {

@@ -19,9 +19,9 @@ const section = (page: Page, id: string) => page.locator(`[data-section="${id}"]
 const search = (page: Page) => page.getByRole("searchbox", { name: "Search links" });
 
 test.describe("Quick Links", () => {
-  test("the sidebar has the entry for an admin, and it opens the page", async ({ page }) => {
+  test("the Infrastructure sidebar has the entry for an admin, and it opens the page", async ({ page }) => {
     await setUpQuickLinks(page);
-    await go(page, "/");
+    await go(page, "/infrastructure");
     const entry = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Quick Links" });
     await expect(entry).toBeVisible();
     await entry.click();

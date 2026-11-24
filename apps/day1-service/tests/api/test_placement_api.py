@@ -159,7 +159,7 @@ def by_mce(body: dict[str, Any]) -> dict[str, dict[str, Any]]:
 async def test_without_a_version_it_lists_what_the_candidates_host_and_picks_nothing(
     placed: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = await get_placement(placed, auth(support.VIEWER))
+    body = await get_placement(placed, auth(support.ALICE))
     assert [c["mce"] for c in body["candidates"]] == [A, B, C]
     assert (body["pick"], body["why"]) == (None, None)
     assert body["problems"] == ["Choose an OpenShift version."]
@@ -173,7 +173,7 @@ async def test_the_pick_its_numbers_and_why(
 ) -> None:
     body = await get_placement(
         placed,
-        auth(support.VIEWER),
+        auth(support.ALICE),
         version=f"{VERSION}-x86_64",
         owner="7",
         flavor="agent-standard",
@@ -236,7 +236,7 @@ async def test_the_min_free_pods_is_a_setting(
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        body = await get_placement(client, auth(support.VIEWER), version="4.17.58")
+        body = await get_placement(client, auth(support.ALICE), version="4.17.58")
     assert by_mce(body)[C]["eligible"] is True
     assert body["server_scan_error"] == (
         "server-scan is not configured (SERVER_SCAN_URL), so spare servers are unknown."
@@ -256,7 +256,7 @@ async def test_the_min_free_pods_is_a_setting(
 async def test_bad_inputs_are_problems(
     placed: httpx.AsyncClient, auth: Auth, support: Any, query: dict[str, str], status: int
 ) -> None:
-    response = await placed.get(PLACEMENT, params=query, headers=auth(support.VIEWER))
+    response = await placed.get(PLACEMENT, params=query, headers=auth(support.ALICE))
     assert response.status_code == status
     assert response.headers["content-type"].startswith("application/problem+json")
 
@@ -295,7 +295,7 @@ async def test_without_live_reads_placement_decides_on_git_and_server_scan(
     """ADR-0050's amendment: placement always runs, and says what it did not check."""
     client, _ = live_off
     body = await get_placement(
-        client, auth(support.VIEWER), version=VERSION, owner="7", need=f"{DELL}:9"
+        client, auth(support.ALICE), version=VERSION, owner="7", need=f"{DELL}:9"
     )
     assert body["live_reads"] is False
     assert body["pick"] == B
@@ -323,7 +323,7 @@ async def test_without_live_reads_no_version_still_means_no_pick(
     live_off: tuple[httpx.AsyncClient, FastAPI], auth: Auth, support: Any
 ) -> None:
     client, _ = live_off
-    body = await get_placement(client, auth(support.VIEWER))
+    body = await get_placement(client, auth(support.ALICE))
     assert (body["pick"], body["problems"]) == (None, ["Choose an OpenShift version."])
 
 
@@ -372,7 +372,7 @@ async def test_an_mce_whose_token_may_not_list_pods_is_unreadable_and_never_pick
     app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        body = await get_placement(client, auth(support.VIEWER), version=VERSION)
+        body = await get_placement(client, auth(support.ALICE), version=VERSION)
     found = by_mce(body)
     assert body["pick"] == A
     assert found[B]["pods"] is None
@@ -482,7 +482,7 @@ async def test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_own
     # The workflow's MR has no label and its own title: its branch says it creates a cluster
     await support.open_provision_mr(gitlab, "ocp4-prod-falcon-site1", mce=B, mador="7")
     await support.open_provision_mr(gitlab, "ocp4-prod-orca-site1", mce=B, branch="someone/orca")
-    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
+    body = await get_placement(placed, auth(support.ALICE), version=VERSION, owner="7")
     found = by_mce(body)
     assert (found[B]["clusters"], found[B]["open_creates"], found[B]["owner_clusters"]) == (1, 1, 1)
     assert body["pick"] == B, "owner 7 has one on each now; B has fewer clusters"
@@ -538,7 +538,7 @@ async def test_an_open_create_whose_diff_is_not_ready_is_named_and_not_counted(
             title=f"Provision hosted cluster ocp4-prod-x-site1 on {A}",
         ),
     )
-    body = await get_placement(placed, auth(support.VIEWER), version=VERSION)
+    body = await get_placement(placed, auth(support.ALICE), version=VERSION)
     assert by_mce(body)[A]["open_creates"] == 0
     (problem,) = body["problems"]
     assert "adds no cluster file yet" in problem
@@ -563,7 +563,7 @@ async def test_server_scan_down_makes_every_spare_count_unknown(
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        body = await get_placement(client, auth(support.VIEWER), version=VERSION, owner="7")
+        body = await get_placement(client, auth(support.ALICE), version=VERSION, owner="7")
     assert body["server_scan_error"].startswith("server-scan could not be read")
     assert {c["mce"]: c["spare"] for c in body["candidates"]} == {A: None, B: None, C: None}
     assert body["pick"] == B, "unknown spare everywhere still ranks on the rest"
@@ -612,7 +612,7 @@ async def test_the_needs_the_form_sends_are_checked_per_type(
 ) -> None:
     body = await get_placement(
         placed,
-        auth(support.VIEWER),
+        auth(support.ALICE),
         version=VERSION,
         need=[f"{DELL}:1", f"{DELL}:1", f"{HP}:2"],
     )
@@ -644,7 +644,7 @@ async def test_a_type_short_on_one_mce_and_unknown_on_another_leaves_no_pick(
     placed: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     """A: 2 healthy Dell, one free Agent not in server-scan; B: 2 Dell in all."""
-    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, need=f"{DELL}:3")
+    body = await get_placement(placed, auth(support.ALICE), version=VERSION, need=f"{DELL}:3")
     found = by_mce(body)
     assert servers_check(found[A]) == (
         "unknown",
@@ -659,10 +659,10 @@ async def test_a_type_short_on_the_pick_takes_it_out(
     placed: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     """Without needs B is the pick (owner 7 has none there); B has no third HP server."""
-    plain = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
+    plain = await get_placement(placed, auth(support.ALICE), version=VERSION, owner="7")
     assert plain["pick"] == B
     short = await get_placement(
-        placed, auth(support.VIEWER), version=VERSION, owner="7", need=f"{HP}:3"
+        placed, auth(support.ALICE), version=VERSION, owner="7", need=f"{HP}:3"
     )
     assert servers_check(by_mce(short)[B]) == ("fail", f"{HP}: 2 healthy free of 3 needed.")
     assert servers_check(by_mce(short)[A])[0] == "fail"
@@ -695,7 +695,7 @@ async def test_a_need_that_is_not_a_type_and_replicas_is_a_problem(
     response = await placed.get(
         PLACEMENT,
         params={"site": "site1", "env": "prod", "need": need},
-        headers=auth(support.VIEWER),
+        headers=auth(support.ALICE),
     )
     assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
 
@@ -706,7 +706,7 @@ async def test_an_unknown_flavor_is_not_found(
     response = await placed.get(
         PLACEMENT,
         params={"site": "site1", "env": "prod", "flavor": "rcs"},
-        headers=auth(support.VIEWER),
+        headers=auth(support.ALICE),
     )
     assert response.status_code == 404
 
@@ -734,7 +734,7 @@ async def test_agents_the_token_may_not_list_make_the_servers_unknown(
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        body = await get_placement(client, auth(support.VIEWER), version=VERSION, need=f"{DELL}:1")
+        body = await get_placement(client, auth(support.ALICE), version=VERSION, need=f"{DELL}:1")
     status, detail = servers_check(by_mce(body)[A])
     assert status == "unknown"
     assert "Its token may not list Agents" in detail
@@ -754,7 +754,7 @@ async def test_without_server_scan_free_agents_count_as_they_are(
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        body = await get_placement(client, auth(support.VIEWER), version=VERSION, need=f"{DELL}:4")
+        body = await get_placement(client, auth(support.ALICE), version=VERSION, need=f"{DELL}:4")
     found = by_mce(body)
     assert found[A]["node_types"][0]["health_checked"] is False
     assert servers_check(found[A]) == (
@@ -767,7 +767,7 @@ async def test_without_server_scan_free_agents_count_as_they_are(
 async def test_an_empty_need_says_no_needs_and_skips_the_flavor(
     placed: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, need="")
+    body = await get_placement(placed, auth(support.ALICE), version=VERSION, need="")
     assert body["needs"] == []
     assert {servers_check(c)[1] for c in body["candidates"]} == {
         "No nodepool names a node type yet."

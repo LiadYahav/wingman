@@ -18,7 +18,7 @@ from fastapi import APIRouter, Query
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context, Scale
 from wingman_day1.api.v1.scale_schemas import ScaleIn, ScaleOptionsOut, ScaleRunOut
-from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.api.v1.visible import cluster_ref
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["scale"])
 
@@ -26,16 +26,14 @@ Site = Annotated[str | None, Query(max_length=63, description="Site folder")]
 Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
 
 
-async def _ref(context: Context, name: str, site: str | None, mce: str | None) -> ClusterRef:
-    return await context.clusters.locate(name, site=site, mce=mce)
-
-
 @router.get("/{name}/scale")
 async def scale_options(
     name: str, context: Context, scale: Scale, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ScaleOptionsOut:
     """The cluster file's NodePools, each named by the chart's rule, and the flavor's locks."""
-    return ScaleOptionsOut.of(await scale.options(await _ref(context, name, site, mce)))
+    return ScaleOptionsOut.of(
+        await scale.options(await cluster_ref(context, user, name, site, mce))
+    )
 
 
 @router.post("/{name}/scale", status_code=202)
@@ -49,7 +47,7 @@ async def start_scale(
     mce: Mce = None,
 ) -> ScaleRunOut:
     """Start update-nodepool: it commits the replicas to day1 main and syncs Argo CD itself."""
-    ref = await _ref(context, name, site, mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     return ScaleRunOut.of(await scale.start(ref, body.target(), user=user))
 
 
@@ -61,5 +59,5 @@ async def scale_run(
 
     For a viewer, ``result.chosen`` and ``result.deleting`` are empty: they name servers.
     """
-    run = await scale.run(await _ref(context, name, site, mce))
+    run = await scale.run(await cluster_ref(context, user, name, site, mce))
     return ScaleRunOut.of(run if user.is_admin else run.without_servers())

@@ -27,12 +27,19 @@ from wingman_day1.api.v1.specs_schemas import (
     SpecOut,
 )
 from wingman_day1.application.approvals import RepoKey
+from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.imports import ImportPick, ImportResult
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.rollout import RolloutTrigger
 from wingman_day1.domain.specs import ClusterSpec
+from wingman_day1.domain.visibility import seen
 
 router = APIRouter(prefix="/api/day1/specs", tags=["specs"])
+
+
+def _ref_of(drift: ClusterDrift) -> ClusterRef:
+    return drift.ref
+
 
 Name = Annotated[str, Path(min_length=1, max_length=63)]
 LastCommit = Annotated[str | None, Query(min_length=7, max_length=64)]
@@ -77,7 +84,7 @@ async def spec_at(
 
 @router.get("/{name}/clusters")
 async def spec_clusters(name: Name, context: Context, user: CurrentUser) -> list[SpecClusterOut]:
-    """Clusters created from the spec, with their drift."""
+    """Clusters created from the spec, with their drift; a viewer's has no KV cluster."""
     return [
         SpecClusterOut(
             name=d.ref.name,
@@ -89,13 +96,13 @@ async def spec_clusters(name: Name, context: Context, user: CurrentUser) -> list
             spec_version=d.spec_version,
             update=FlavorUpdateOut.of(d.update),
         )
-        for d in await context.drift.for_spec(name)
+        for d in seen(user, await context.drift.for_spec(name), _ref_of)
     ]
 
 
 @router.get("/{name}/drift")
 async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[SpecDriftOut]:
-    """Drift of every cluster created from the spec."""
+    """Drift of every cluster created from the spec; a viewer's has no KV cluster."""
     return [
         SpecDriftOut(
             cluster=d.ref.name,
@@ -107,7 +114,7 @@ async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[Sp
             error=d.error,
             update=FlavorUpdateOut.of(d.update),
         )
-        for d in await context.drift.for_spec(name)
+        for d in seen(user, await context.drift.for_spec(name), _ref_of)
     ]
 
 
@@ -116,9 +123,11 @@ async def rollout_status(name: Name, context: Context, user: CurrentUser) -> Rol
     """The rollout of the flavor's newest version, one MR per cluster (ADR-0044).
 
     From GitLab's state; reading it starts a run when work is pending (the
-    fallback trigger).
+    fallback trigger). A viewer's has no KV cluster (ADR-0067).
     """
-    return RolloutStatusOut.of(await context.rollouts.read(name))
+    status = await context.rollouts.read(name)
+    shown = seen(user, status.clusters, lambda c: c.cluster.ref)
+    return RolloutStatusOut.of(replace(status, clusters=tuple(shown)))
 
 
 @router.post("/{name}/rollout", status_code=202)

@@ -15,7 +15,7 @@ const SITES_SHOWN = 5;
 function SiteRow({ site, total }: { site: SiteCount; total: number }) {
   return (
     <Link
-      href="/clusters"
+      href="/mces"
       data-testid="overview-site"
       data-site={site.site}
       aria-label={`${site.site}: ${plural(site.count, "cluster")}`}
@@ -52,7 +52,7 @@ function SitesBody() {
     <div className="-mx-3 space-y-1">
       {sites.slice(0, SITES_SHOWN).map((site) => <SiteRow key={site.site} site={site} total={list.length} />)}
       {hidden.length > 0 && (
-        <Link href="/clusters" className="block px-3 pt-1 text-xs text-muted-foreground hover:text-foreground" data-testid="overview-sites-more">
+        <Link href="/mces" className="block px-3 pt-1 text-xs text-muted-foreground hover:text-foreground" data-testid="overview-sites-more">
           {plural(hidden.length, "more site")} · {plural(hidden.reduce((n, s) => n + s.count, 0), "cluster")}
         </Link>
       )}
@@ -60,13 +60,17 @@ function SitesBody() {
   );
 }
 
-/** The clusters by site and MCE: the day1 repo's folders each cluster file sits in. */
+/**
+ * The customers' clusters by site and Customer MCE: the day1 repo's folders
+ * each cluster file sits in. The Infrastructure Overview's (ADR-0067).
+ */
 export function ClustersBySiteCard() {
   return (
     <OverviewCard
       title="Where Clusters Run"
-      hint="Clusters per site, from the day1 repo's site and MCE folders; each bar is the site's share of all clusters, and the line below it counts each MCE's."
-      href="/clusters"
+      hint="The customers' clusters per site, from the day1 repo's site and MCE folders; each bar is the site's share of all of them, and the line below it counts each MCE's. The seeds' KV clusters are on Seeds & KV Clusters."
+      href="/mces"
+      linkLabel="Customer MCEs"
       data-testid="overview-sites"
     >
       <SitesBody />

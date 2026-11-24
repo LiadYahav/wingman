@@ -53,6 +53,7 @@ from wingman_day1.domain.errors import (
     InvalidInputError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.kind_names import customer_mces, require_customer_mce
 from wingman_day1.domain.machines import AgentObservation
 from wingman_day1.domain.mce_capacity import (
     FreePods,
@@ -255,8 +256,7 @@ class PlacementService:
             raise InvalidInputError("the placement's inputs are not acceptable", problems)
         if needs is None:
             needs = await self._flavor_needs(flavor)
-        names = await self._sites.mce_names(site)
-        candidates = [m for m in names if describe_mce(m, site=site).env is env]
+        candidates = customer_mces(await self._sites.mce_names(site), site=site, env=env)
         inputs = PlacementInputs(
             site=site,
             env=env,
@@ -293,6 +293,7 @@ class PlacementService:
         form's pick is no longer the pick.
         """
         values = load_values(content)
+        require_customer_mce(ref.mce)
         env = describe_mce(ref.mce, site=ref.site).env
         if env is None:
             raise InvalidInputError(

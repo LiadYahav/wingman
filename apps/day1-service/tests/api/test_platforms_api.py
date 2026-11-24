@@ -132,4 +132,4 @@ async def test_the_network_and_inventory_reads_stay(
     app = app_of(support, gitlab, clock)
     network = await get(app, f"/api/day1/clusters/{AMIT}/network", auth(support.VIEWER))
     assert (network.status_code, network.json()["epg"]) == (200, "EPG_site2_HC_2490")
-    assert (await get(app, "/api/day1/inventory", auth(support.VIEWER))).status_code == 200
+    assert (await get(app, "/api/day1/inventory", auth(support.ALICE))).status_code == 200
