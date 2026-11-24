@@ -12,12 +12,14 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from wingman_core.domain.cluster_kinds import HostedClusterKind
 from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.api.v1.schemas import MAX_FILE_BYTES, DriftStateOut, FlavorUpdateOut, _In, _iso
 from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
+from wingman_day1.domain.kv_clusters import MAX_KV_WORKERS, kv_workers, kv_zone_problems
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef, NameSuggestion
 from wingman_day1.domain.network import segment_of
 from wingman_day1.domain.placement import MAX_REASON
@@ -86,6 +88,29 @@ class HostedClusterOut(BaseModel):
         return cls(cluster_name=ref.cluster_name, name=ref.name, namespace=ref.namespace)
 
 
+class KvClusterOut(BaseModel):
+    """A KV cluster's place in its zone, from its file (ADR-0067's amendment); else ``null``."""
+
+    workers: int
+    """Its NodePools' ``replicas``, summed: the hypervisors it asks for."""
+    max_workers: int
+    """The capacity policy's ``maxNodes``: create-vm fills it up to this many (AD31)."""
+    zone_problems: list[str]
+    """Why create-vm never places a VM on it: its NodePools name no zone, or another one."""
+
+    @classmethod
+    def of(cls, cluster: ClusterFile) -> KvClusterOut | None:
+        """A KV cluster's facts; ``None`` for a tenant's, or a file that does not parse."""
+        if cluster.ref.kind is not HostedClusterKind.KV or cluster.values is None:
+            return None
+        pools = cluster.values.nodepools
+        return cls(
+            workers=kv_workers(pools),
+            max_workers=MAX_KV_WORKERS,
+            zone_problems=kv_zone_problems(cluster.naming.zone, pools),
+        )
+
+
 class ClusterStatusOut(BaseModel):
     """A cluster in the list (the legacy ``ClusterStatus`` plus file facts)."""
 
@@ -113,6 +138,8 @@ class ClusterStatusOut(BaseModel):
     """While upgrades are on, the newest release the cluster's MCE offers above its
     ``mastertag`` (ADR-0034's list); ``null`` when none is, or upgrades are off. A
     suggestion: the upgrade-cluster workflow plans the path (ADR-0055)."""
+    kv: KvClusterOut | None = None
+    """A KV cluster's workers and zone check (ADR-0067's amendment); ``null`` for a tenant's."""
 
     @classmethod
     def of(cls, cluster: ClusterFile, *, upgrade_available: str | None = None) -> ClusterStatusOut:
@@ -139,6 +166,7 @@ class ClusterStatusOut(BaseModel):
             },
             problems=list(cluster.problems),
             upgrade_available=upgrade_available,
+            kv=KvClusterOut.of(cluster),
         )
 
 
@@ -280,6 +308,8 @@ class ClusterDetailOut(BaseModel):
     problems: list[str]
     segments_manager: Annotated[SegmentsManagerOut | None, ADMIN_ONLY]
     """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set."""
+    kv: KvClusterOut | None = None
+    """A KV cluster's workers and zone check (ADR-0067's amendment); ``null`` for a tenant's."""
 
 
 def cluster_detail(
@@ -315,6 +345,7 @@ def cluster_detail(
         mce_default_mastertag=mce_default_mastertag,
         problems=list(cluster.problems),
         segments_manager=SegmentsManagerOut.of(segments_manager) if segments_manager else None,
+        kv=KvClusterOut.of(cluster),
     )
 
 

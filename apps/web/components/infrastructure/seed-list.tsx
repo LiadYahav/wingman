@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ChevronRight, Sprout, TriangleAlert } from "lucide-react";
+import { ChevronRight, MapPinOff, Sprout, TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
+import { Hint } from "@/components/common/hint";
 import { ProblemList } from "@/components/common/problem-list";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +17,18 @@ import { isKvCluster } from "@/lib/workspaces";
 import type { ClusterStatus } from "@/types";
 import { Chip, OffConvention, PageHeader, SiteHeading } from "./page-parts";
 import { useAllClusters, useMces } from "./use-infrastructure";
+
+/** NodePools that name no zone, or another than the name's: create-vm never places a VM there (ADR-0067). */
+function ZoneProblems({ problems }: { problems: string[] }) {
+  if (problems.length === 0) return null;
+  return (
+    <Hint hint={problems.join(" ")} label="Never offered to VM placement" testId="kv-zone-problems">
+      <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-[11px] font-medium text-status-warning-fg">
+        <MapPinOff aria-hidden className="h-3 w-3" />Zone
+      </span>
+    </Hint>
+  );
+}
 
 /** One KV cluster: a row to its page, managed there like any hosted cluster. */
 function KvClusterRow({ cluster, status }: { cluster: ClusterStatus; status: LiveStatuses | undefined }) {
@@ -36,6 +49,7 @@ function KvClusterRow({ cluster, status }: { cluster: ClusterStatus; status: Liv
             <TriangleAlert aria-hidden className="h-3 w-3" />Does not parse
           </span>
         )}
+        <ZoneProblems problems={cluster.kv?.zone_problems ?? []} />
         {/* Fixed widths from sm up, so each row's version and status line up with the others */}
         <span className="font-mono text-xs text-muted-foreground sm:w-32 sm:text-right">{cluster.mastertag ?? "no mastertag"}</span>
         <span className="flex sm:w-24 sm:justify-end">{live && <StatusBadge phase={liveStatusToPhase(live)} />}</span>

@@ -26,7 +26,7 @@ import { LiveStatusCard } from "@/components/clusters/live-status-card";
 import { UpgradeAction } from "@/components/clusters/upgrade/upgrade-action";
 import { UpgradePanel } from "@/components/clusters/upgrade/upgrade-panel";
 import { ClusterInfoCard, HostedClusterCard, NodePoolsCard, SpecCard } from "@/components/clusters/cluster-facts";
-import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notices";
+import { FileProblems, KvZoneNotice, NamingNotice } from "@/components/clusters/cluster-notices";
 import { ClusterFileEditor } from "@/components/clusters/cluster-file-editor";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
@@ -333,6 +333,7 @@ function ClusterDetailContent() {
             <>
               <FileProblems problems={cluster.problems} />
               <NamingNotice cluster={cluster} />
+              <KvZoneNotice cluster={cluster} />
               <UpgradePanel name={name} where={where} isAdmin={isAdmin} onOpenNodesTab={isAdmin ? () => setActiveTab("nodes") : undefined} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <ClusterInfoCard cluster={cluster} mastertagAction={<UpgradeAction name={name} where={where} isAdmin={isAdmin} />} />
