@@ -53,17 +53,13 @@ from wingman_day1.domain.errors import (
     AlreadyInUseError,
     AmbiguousNameError,
     InvalidInputError,
-    RenderError,
     ResourceNotFoundError,
     StaleError,
 )
-from wingman_day1.domain.image_mirrors import mirror_problems
 from wingman_day1.domain.kind_names import describe_cluster_file
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
     MachineConfigCatalog,
-    cluster_config_problems,
-    expand_network_configs,
 )
 from wingman_day1.domain.names import (
     HOSTED_CLUSTER_PREFIX,
@@ -75,14 +71,12 @@ from wingman_day1.domain.names import (
     suggest_cluster_name,
 )
 from wingman_day1.domain.openshift_versions import unhostable_problems
-from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Admission, Choice, Decision
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
-from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
-from wingman_day1.domain.tuning_profiles import TuningCatalog, edit_text_problems, input_problems
-from wingman_day1.domain.tuning_rule import render_inputs
+from wingman_day1.domain.template import build_inputs, check_inputs
+from wingman_day1.domain.tuning_profiles import TuningCatalog, edit_text_problems
 from wingman_day1.domain.workflows import ProvisionRun, provision_workflow_id
 from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 
@@ -410,23 +404,19 @@ class ClusterService:
         problems = check_inputs(inputs)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
-        cluster_name = self._naming.for_file(ref.name).cluster_name
-        problems = [*conflicts, *missing, *owner_problems(inputs), *mirror_problems(inputs)]
-        problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
-        problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
-        problems += input_problems(inputs, tuning)
-        problems += rendered_file.input_problems(inputs, self._owned)
-        if problems:
-            raise InvalidInputError("the cluster's inputs are not acceptable", problems)
-        inputs = render_inputs(expand_network_configs(inputs, cluster_name=cluster_name))
-        inputs = rendered_file.with_agent_labels(inputs, self._owned)  # the deployment's (ADR-0065)
-        template = spec.spec.day1.template
-        if not template.strip():
-            raise RenderError("the specs project has no cluster-template.j2")
-        rendered = render_cluster_file(template, inputs)
-        problems = rendered_file.rendered_problems(inputs, rendered)  # and what it must hold
-        require_valid(problems, message="the rendered cluster file breaks the values-file contract")
-        return rendered
+        return rendered_file.render_new_file(
+            spec.spec.day1.template,
+            inputs,
+            catalog=catalog,
+            tuning=tuning,
+            owned=self._owned,
+            cluster_name=self._naming.for_file(ref.name).cluster_name,
+            problems=[
+                *conflicts,
+                *missing,
+                *sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name),
+            ],
+        )
 
     async def _require_hostable(self, mce: str, content: str) -> None:
         """The new file's ``mastertag`` must be a release the MCE can host (ADR-0034)."""
