@@ -208,16 +208,10 @@ def _cluster_card(
 
 
 def _mce_description(mce: MceInfo) -> str | None:
-    parts: list[str] = []
-    if mce.hub_version:
-        parts.append(f"OpenShift {mce.hub_version.split('-', 1)[0]}")
-    if mce.cluster_count is not None:
-        count = mce.cluster_count
-        parts.append(
-            "no hosted clusters"
-            if count == 0
-            else f"{count} hosted cluster{'' if count == 1 else 's'}"
-        )
+    """``OpenShift 4.18.22 · 3 hosted clusters``, either half when it is known."""
+    parts = [f"OpenShift {mce.hub_version.split('-', 1)[0]}"] if mce.hub_version else []
+    if (count := mce.cluster_count) is not None:
+        parts.append(f"{count or 'no'} hosted cluster{'' if count == 1 else 's'}")
     return " · ".join(parts) or None
 
 
