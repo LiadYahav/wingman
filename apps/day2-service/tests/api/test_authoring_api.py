@@ -159,9 +159,11 @@ async def test_an_existing_add_on_is_refused_with_its_sig_values_named(
     assert "team default" not in str(exists).lower()
 
 
-async def test_writes_are_admin_only(vic: httpx.AsyncClient) -> None:
+async def test_writes_are_admin_only(jane: httpx.AsyncClient, vic: httpx.AsyncClient) -> None:
     problem(await vic.post("/api/day2/addons/redbull", json=NEW), 403, "FORBIDDEN")
-    assert ok(await vic.get("/api/day2/fleet-defaults"))
+    assert ok(await jane.get("/api/day2/fleet-defaults"))
+    # A viewer's are the hosted clusters' alone, and the fixtures have none (ADR-0068)
+    assert ok(await vic.get("/api/day2/fleet-defaults")) == []
 
 
 async def test_team_default_edit_sends_only_what_changed(jane: httpx.AsyncClient) -> None:

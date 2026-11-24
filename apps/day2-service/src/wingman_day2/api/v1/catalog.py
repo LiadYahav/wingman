@@ -1,4 +1,9 @@
-"""Teams, the chart catalog, chart versions and chart default values; repo lints."""
+"""Teams, the chart catalog, chart versions and chart default values; repo lints.
+
+A viewer's catalog names the hosted clusters' fleet scope alone, and their
+lints are the findings about a tenant's cluster or about no destination, at a
+file they may read (ADR-0068, ``api/v1/visible.py``).
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ from wingman_core.web.auth import CurrentUser
 from wingman_day2.api.v1.catalog_schemas import GitLabInfoOut, TeamOut
 from wingman_day2.api.v1.dependencies import Services
 from wingman_day2.api.v1.schemas import CatalogEntryOut, FindingOut, findings
+from wingman_day2.api.v1.visible import view_of
 
 router = APIRouter(prefix="/api/day2", tags=["catalog"])
 
@@ -46,17 +52,19 @@ async def list_addons(
 ) -> list[CatalogEntryOut]:
     """Every catalog entry (``operators/<chart>/``), optionally one team's."""
     entries = await day2.catalog.entries(team)
-    topology = await day2.topology.load()
-    access = await day2.access.of_all([topology.team(t).team for t in {e.team for e in entries}])
-    return [CatalogEntryOut.of(e, access[e.team]) for e in entries]
+    seen = await view_of(day2, user)
+    teams = [seen.topology.team(t).team for t in {e.team for e in entries}]
+    access = await day2.access.of_all(teams)
+    return seen.all_shown([seen.catalog(CatalogEntryOut.of(e, access[e.team])) for e in entries])
 
 
 @router.get("/addons/{team}/{addon}")
 async def get_addon(team: str, addon: str, user: CurrentUser, day2: Services) -> CatalogEntryOut:
     """One catalog entry."""
     entry = await day2.catalog.entry(team, addon)
-    found = (await day2.topology.load()).team(team).team
-    return CatalogEntryOut.of(entry, await day2.access.of(found))
+    seen = await view_of(day2, user)
+    found = seen.topology.team(team).team
+    return seen.shown(seen.catalog(CatalogEntryOut.of(entry, await day2.access.of(found))))
 
 
 @router.get("/addons/{team}/{addon}/versions")
@@ -82,4 +90,5 @@ async def lints(
     user: CurrentUser, day2: Services, team: str | None = Query(default=None)
 ) -> list[FindingOut]:
     """Every check on the team repos: render_chain.py's rules plus Wingman's own."""
-    return findings(await day2.lints.report(team))
+    seen = await view_of(day2, user)
+    return seen.all_shown(findings(await day2.lints.report(team)))

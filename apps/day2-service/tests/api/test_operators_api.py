@@ -31,9 +31,10 @@ async def preview(client: httpx.AsyncClient, url: str, body: dict[str, Any]) -> 
 
 
 async def test_the_operators_list_has_the_catalog_and_defaults_outside_it(
-    vic: httpx.AsyncClient,
+    jane: httpx.AsyncClient,
 ) -> None:
-    found = {o["name"]: o for o in ok(await vic.get("/api/day2/teams/redbull/operators"))}
+    # An admin's: a viewer's has no MCE default (test_viewer_reads_api.py, ADR-0068)
+    found = {o["name"]: o for o in ok(await jane.get("/api/day2/teams/redbull/operators"))}
     assert sorted(found) == [
         "bmhgen",
         "cluster-roles",
@@ -47,13 +48,14 @@ async def test_the_operators_list_has_the_catalog_and_defaults_outside_it(
     roles = found["cluster-roles"]
     assert roles["in_catalog"] and roles["defaults"] == [] and roles["installed_on"] == 5
     assert roles["writable"] is True and roles["read_only_reason"] is None
-    problem(await vic.get("/api/day2/teams/ghost/operators"), 404, "NOT_FOUND")
+    problem(await jane.get("/api/day2/teams/ghost/operators"), 404, "NOT_FOUND")
 
 
 async def test_an_operator_page_shows_each_scope_and_each_destination(
-    vic: httpx.AsyncClient,
+    jane: httpx.AsyncClient,
 ) -> None:
-    body = ok(await vic.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
+    # An admin's: a viewer's has the hosted clusters' scope alone (ADR-0068)
+    body = ok(await jane.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
     assert body["in_catalog"] is False and body["catalog"] is None
     assert body["deploy_config"]["exists"] is False and body["deploy_config"]["text"] is None
     scopes = {s["scope"]: s for s in body["scopes"]}
@@ -80,11 +82,11 @@ async def test_an_operator_page_shows_each_scope_and_each_destination(
     assert "mce:site2:prod:ocp4-prod-mce-site2-a" in [u["id"] for u in mces["unregistered"]]
     assert scopes["hub"]["exclusions"] is None and not scopes["hub"]["is_default"]
     assert scopes["hub"]["destinations"][0]["state"] == "none"
-    roles = ok(await vic.get("/api/day2/teams/redbull/operators/cluster-roles"))
+    roles = ok(await jane.get("/api/day2/teams/redbull/operators/cluster-roles"))
     hosted = next(s for s in roles["scopes"] if s["scope"] == "hosted-clusters")
     assert {d["state"] for d in hosted["destinations"]} == {"own-folder"}
     assert roles["catalog"]["name"] == "cluster-roles" and roles["values_file"]["exists"]
-    problem(await vic.get("/api/day2/teams/redbull/operators/ghost"), 404, "NOT_FOUND")
+    problem(await jane.get("/api/day2/teams/redbull/operators/ghost"), 404, "NOT_FOUND")
 
 
 async def test_values_for_one_mce_are_previewed_then_confirmed_against_the_digest(
@@ -210,14 +212,16 @@ async def test_the_writes_are_admin_only_and_refused_for_a_read_only_team(
 
 
 async def test_the_addons_paths_and_the_3_12_operators_aliases_answer_the_same(
-    vic: httpx.AsyncClient,
+    jane: httpx.AsyncClient, vic: httpx.AsyncClient
 ) -> None:
-    listed = ok(await vic.get("/api/day2/teams/redbull/addons"))
-    assert listed == ok(await vic.get("/api/day2/teams/redbull/operators"))
-    detail = ok(await vic.get("/api/day2/teams/redbull/addons/dhcp-api-token"))
-    assert detail == ok(await vic.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
+    listed = ok(await jane.get("/api/day2/teams/redbull/addons"))
+    assert listed == ok(await jane.get("/api/day2/teams/redbull/operators"))
+    detail = ok(await jane.get("/api/day2/teams/redbull/addons/dhcp-api-token"))
+    assert detail == ok(await jane.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
     assert detail["name"] == "dhcp-api-token"
-    problem(await vic.get("/api/day2/teams/redbull/addons/ghost"), 404, "NOT_FOUND")
+    problem(await jane.get("/api/day2/teams/redbull/addons/ghost"), 404, "NOT_FOUND")
+    roles = ok(await vic.get("/api/day2/teams/redbull/addons/cluster-roles"))
+    assert roles == ok(await vic.get("/api/day2/teams/redbull/operators/cluster-roles"))
 
 
 async def test_an_env_override_and_its_preview_on_a_destination_of_that_env(

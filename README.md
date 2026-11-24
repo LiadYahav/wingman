@@ -305,6 +305,17 @@ Each MCE's available Agents by InfraEnv pool, as server-scan counts them, the ad
 `{cluster}` is a cluster id (`hub`, `mce:<site>:<env>:<mce>`,
 `hosted:<site>:<env>:<mce>:<cluster>`, `upi:<site>:<env>:<cluster>`) or a bare
 name that names one destination (`?mce=` when it names more than one).
+A viewer knows of the tenants' hosted clusters alone (ADR-0067, ADR-0068): the
+hub, the UPI clusters, every MCE hub (seeds included) and every KV cluster are
+left out of their lists, and naming one, or any id or `hub`, is the unknown
+cluster's `404`. A viewer names a cluster by its bare name (`?mce=` and a
+body's `mce` are ignored); in their answers its `id` is that name, `mce`,
+`argo` and `gitlab_url` are `null`, a path in its own folder starts at the
+cluster (`<cluster>/<chart>/values.yaml`), and every text has the MCEs', the
+hub's, the UPI and KV clusters' names as `[hidden]`. Their approvals, audit,
+lints, fleet defaults and add-on pages are the tenants' and the hosted
+clusters' scope's alone, and of a diff they read a tenant's own files and the
+team's `operators/` and `defaults/hosted-clusters/` files.
 
 #### Catalog and lints
 
@@ -337,7 +348,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach |
+| `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach (admins only, ADR-0068) |
 | `POST` | `/api/day2/addons/{team}` | Add an add-on to the team's catalog, optionally as a fleet default (opens an MR) |
 | `PUT` | `/api/day2/addons/{team}/{addon}` | Edit the add-on (the API's team default): deploy config (edited in place), sync options, Sig values (opens an MR) |
 | `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
@@ -355,7 +366,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`); a viewer's has no MCE (seeds included) and no KV cluster, and naming one is a `404` (ADR-0067) |
+| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`); a viewer's are the tenants' hosted clusters, by name (ADR-0067, ADR-0068) |
 | `GET` | `/api/day2/clusters/{cluster}` | One destination |
 | `GET` | `/api/day2/clusters/{cluster}/addons` | The charts on it: its own folders and fleet defaults |
 | `GET` | `/api/day2/clusters/{cluster}/addons/{team}/{addon}` | The chart's merged values, layer by layer, with provenance |

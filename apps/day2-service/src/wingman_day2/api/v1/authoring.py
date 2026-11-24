@@ -29,6 +29,7 @@ from wingman_day2.api.v1.authoring_schemas import (
     UpdateTeamDefaultBody,
 )
 from wingman_day2.api.v1.dependencies import Services
+from wingman_day2.api.v1.visible import view_of
 from wingman_day2.application.authoring import UNSET, AuthoringResult
 from wingman_day2.domain.clusters import DefaultsScope
 
@@ -48,8 +49,11 @@ def _answer(
 
 
 @router.get("/teams/{team}/addon-template")
-async def addon_template(team: str, user: CurrentUser, day2: Services) -> AddonTemplateOut:
-    """What a new add-on of the team starts from: its usual sync options and chart repos."""
+async def addon_template(team: str, user: AdminUser, day2: Services) -> AddonTemplateOut:
+    """What a new add-on of the team starts from: its usual sync options and chart repos.
+
+    An admin's (ADR-0068): each scope's destinations by id, for the new add-on's form.
+    """
     return AddonTemplateOut.of(await day2.authoring.template(team))
 
 
@@ -57,8 +61,15 @@ async def addon_template(team: str, user: CurrentUser, day2: Services) -> AddonT
 async def list_fleet_defaults(
     user: CurrentUser, day2: Services, team: str | None = Query(default=None)
 ) -> list[FleetDefaultOut]:
-    """Every ``defaults/<scope>/<chart>/``, with what it reaches and its sync options."""
-    return [FleetDefaultOut.of(d) for d in await day2.authoring.fleet_defaults(team)]
+    """Every ``defaults/<scope>/<chart>/``, with what it reaches and its sync options.
+
+    A viewer's are the hosted clusters' alone, each reaching the tenants' clusters (ADR-0068).
+    """
+    seen = await view_of(day2, user)
+    defaults = [
+        seen.fleet_default(FleetDefaultOut.of(d)) for d in await day2.authoring.fleet_defaults(team)
+    ]
+    return seen.all_shown([d for d in defaults if d is not None])
 
 
 @router.post("/addons/{team}", status_code=status.HTTP_201_CREATED)

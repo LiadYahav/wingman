@@ -59,8 +59,8 @@ answer depends on it; the web only follows.
 | One item | An item a viewer may not know of looks missing: the missing thing's 404, in its words |
 | A structured field that names the infrastructure | `null` for a viewer: every `mce`, every path through an MCE's folder, every link into the repo at one. The response models mark them `ADMIN_ONLY` (`wingman_core.web.viewer`); `for_viewer` answers the model with them `null`, at any depth |
 | Free text | Not parsed, but every infrastructure name the service knows reads `[hidden]` (`wingman_core.domain.redaction.Redactor`, as whole tokens): each MCE folder's and seed's, each KV cluster's, and in day2 the hub's and each UPI cluster's. Titles, descriptions, commit messages, diffs, a workflow's words, a condition's message, a cluster file's text. A name the service does not know (a server's, an address) is not found |
-| A file in a diff | A tenant cluster's file alone, named by its file name (`ocp4-prod-lark-site1.yaml`); one cluster's merge request shows that cluster's file alone |
-| A cluster named in a request | By its name alone: `site`, `mce` (and day2's destination id) are an admin's to send, and a viewer's are ignored, so they test no MCE name |
+| A file in a diff | A tenant cluster's file alone, named by its file name (`ocp4-prod-lark-site1.yaml`); one cluster's merge request shows that cluster's file alone. In day2, a tenant's own files from its folder on, and the team's files that are about no one destination (section 4) |
+| A cluster named in a request | By its name alone: `site` and `mce` are an admin's to send, and a viewer's are ignored, so they test no MCE name; day2's destination id is an admin's too, and from a viewer an unknown name |
 
 An admin reads everything as before: every rule passes their request through
 unchanged.
@@ -113,6 +113,39 @@ The redactor's names are `Day1Tree.infrastructure`: every MCE-level folder
 a world with every feature on and a merge request of each kind open, and
 fails on any MCE's, seed's or KV cluster's name or `mces/<folder>` path; a new
 viewer route must join its list, or its coverage test fails.
+
+### 4. day2
+
+A viewer's destinations are the tenants' hosted clusters alone
+(`domain/visibility.py`, `sees_destination`): the hub, the UPI clusters,
+every MCE hub (a seed's too) and every KV cluster are an admin's, and of the
+fleet scopes the hosted clusters' alone (`sees_scope`). Each route finds and
+answers through `api/v1/visible.py`'s `View`, from one topology read:
+
+| Route | A viewer (ADR-0068) |
+|---|---|
+| `GET /api/day2/clusters` | The tenants' clusters: `id` is the bare name, `mce` and `argo` `null` (`ADMIN_ONLY`), the warnings theirs |
+| `GET /clusters/{cluster}`, `/addons`, `/addons/{team}/{addon}`, `/history`, `/upgrade-check`, `POST /merge-preview` | `View.destination`: the bare name among the tenants' clusters; an id, `hub`, a hidden destination's name are the unknown name's 404, `?mce=` and the body's `mce` are ignored, a name two tenants share is ambiguous without their ids. The service is then asked by the destination's id, an admin's too, so nothing resolves the name again against what the viewer may not know. `gitlab_url` and `deploy.argo` `null`; a path in the tenant's folder reads from the cluster on (`<cluster>/<chart>/values.yaml`); every value layer stays with its role, its MCE layer `sites/<s>/<e>/mces/[hidden]/values.yaml`; `merge-preview` takes a layer by the path the viewer read |
+| `GET /approvals`, `/audit/merge-requests` | Those whose title or description names a tenant (name or id) or the hosted clusters' scope, and nothing hidden: no other destination's id or name, no other scope ("every MCE", "the hub", "every UPI cluster", `defaults/<scope>`), no MCE folder but those of the tenants named (a tenant's id, folder and Argo CD carry its MCE). Whole tokens, as the redactor matches (`Sight.about`) |
+| `GET /approvals/{team}/{iid}`, `/audit/commits/{sha}/diff` | Of the diff, a tenant's own files (from the cluster on) and the team's `operators/…` and `defaults/hosted-clusters/<chart>/…` (a `values-<name>.yaml` there of a tenant or an env), `Sight.file`; a merge request not a viewer's, or one or a commit with no such file, is the missing one's 404 |
+| `GET /audit/commits` | Those whose message is about a tenant, by the same rule |
+| `GET /lints`, and every `warnings` list | The findings about a tenant (by id) or no destination, at no path or one `Sight.file` reads |
+| `GET /addons`, `/addons/{team}/{addon}` | `fleet_defaults` names the hosted clusters' scope alone |
+| `GET /fleet-defaults` | The hosted clusters' defaults, their `reach` and `excluded` the tenants' names, their `tweaks` a tenant's or an env's |
+| `GET /teams/{team}/addons`, `/{addon}` (and the deprecated `operators` paths) | Counted and listed from the tenants' destinations alone (`Topology.visible_to` keeps each team's plan to them): the hosted clusters' scope, no unregistered destination, `exclusions.yaml`'s tenants' names; a chart that is only another scope's default is the unknown chart's 404 |
+| `GET /teams/{team}/addon-template` | `AdminUser`: each scope's destinations by id, for an admin's new add-on form |
+| Every day2 error a viewer's read raises | Its words and details through the same view; a refused `override_path` lists no layer |
+
+The redactor's names are `Topology.infrastructure`: every MCE-level folder,
+the hub's name and its two Argo CDs' (`prod-hub`, `prod-hub-upi`), each UPI
+cluster's and each KV cluster's. Day1's drift reads a tenant's add-ons as a
+viewer (`system:wingman-day1`) by its name; its `?mce=` is ignored.
+`tests/api/test_viewer_reads_api.py` reads every route a viewer may call,
+with an install open on a tenant, an MCE hub, the hub, a UPI and a KV
+cluster, a default of the hosted clusters and of the MCEs open, and a
+tenant's and an MCE's install merged; it fails on any hidden name, `mce:` or
+`upi:` id or `mces/<folder>` path, and its coverage test on a viewer route
+not in its list.
 
 ### 5. The web follows
 
@@ -175,6 +208,17 @@ holds, and sends nothing a viewer's answer does not give it.
   cluster that follows the flavor; no list names one.
 - A merge request or commit text that names an MCE Wingman's tree does not
   hold (a deleted one) is not redacted.
+- day2: a viewer's merge requests and commits are those whose words name a
+  tenant or the hosted clusters' scope; a Sig values edit names neither, so
+  it is an admin's, as is a GitLab merge commit whose message names no
+  tenant. Of a tenant's text a viewer reads its MCE as `[hidden]`, its id
+  `hosted:<site>:<env>:[hidden]:<name>`.
+- day2: a viewer's `id` is a bare name, so the web addresses their clusters
+  by name; a viewer cannot reach a tenant's cluster whose name a second
+  tenant's shares (an admin's id is the way).
+- day2: a viewer may preview a diff of the team's Sig values or a hosted
+  clusters' default whose merge request or commit is an admin's; those files
+  name no destination.
 - The Documentation's general sections (the platform overview, clusters,
   add-ons, roles, troubleshooting) still say what an MCE or the hub is, as
   the public repo's docs do; they name no deployment's MCE. The sections
@@ -195,6 +239,17 @@ holds, and sends nothing a viewer's answer does not give it.
   request about no cluster, the commits and a commit's diff, the status by
   name; `test_status_api.py` (a viewer's stream by name, the hub's words
   hidden) and `test_upgrades_api.py` (a viewer's run without its MCE).
+- `apps/day2-service/tests/unit/domain/test_visibility.py` (the tenants and
+  the hosted clusters' scope, the redactor's names, a tenant's id and paths,
+  the files of a diff, a finding, a merge request's or commit's words).
+- `apps/day2-service/tests/api/test_viewer_reads_api.py`: the crawl and its
+  coverage, the hub, a UPI, an MCE, a seed and a KV cluster answered as
+  unknown names, a tenant's `id`, `mce`, `argo` and links, `?mce=` ignored
+  (day1's drift session too), a name a UPI shares resolved once to the
+  tenant, a name two tenants share ambiguous without ids, the value stack's
+  paths and a preview by them, a refused preview with no path, the merge
+  requests, commits and diffs, the lints, fleet defaults and add-on pages,
+  and the add-on template's 403; `test_visibility_api.py` (ADR-0067's).
 - `apps/web/lib/clusters.test.ts` (a viewer's link and reads by name,
   `placeOf`) and `lib/query-cache.test.ts` (the cache is one user's); the
   Playwright spec `viewer-no-infrastructure.spec.ts`: the clusters list and a

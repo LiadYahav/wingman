@@ -32,6 +32,11 @@ class TeamMergeRequest:
     merge_request: MergeRequest
 
 
+def missing_commit(sha: str) -> NotFoundError:
+    """What asking for a commit no team repo has answers (404)."""
+    return NotFoundError(f"commit {sha} is in no team repo")
+
+
 def _page[T](items: list[T], per_page: int, page: int) -> list[T]:
     return items[(page - 1) * per_page : page * per_page]
 
@@ -93,7 +98,7 @@ class AuditService:
         ):
             if found is not None:
                 return candidate.name, found
-        raise NotFoundError(f"commit {sha} is in no team repo")
+        raise missing_commit(sha)
 
     async def cluster_history(
         self, key: str, *, mce: str | None = None, limit: int = 50

@@ -130,6 +130,40 @@ with `details.rule`.
 - `GET /clusters/{id}/history` entries keep `{sha, short_sha, message,
   author, date, web_url, team}`.
 
+## A viewer's answers (ADR-0068, 2026-11-24)
+
+What a viewer's session reads (an admin's answers are unchanged):
+
+- Destinations are the tenants' hosted clusters alone, addressed by their
+  bare name. An id, `hub`, or any other destination's name is `404
+  NOT_FOUND` in an unknown name's words; `?mce=` and `merge-preview`'s `mce`
+  are ignored; a name two tenants share is `422` with `details: {cluster}`,
+  no `candidates`.
+- `id` (a destination's, `ClusterInstalled.id`, `ValuesPreview.cluster`,
+  `UpgradeCheck.cluster`, a finding's `cluster`, a scope destination's `id`
+  and `override_shared_with`, a fleet default's `reach` and `excluded`) is
+  the bare name.
+- `null`: `mce` (destination, `ClusterInstalled`, scope destination,
+  unregistered), `argo` (destination, `deploy.argo`), an installed chart's
+  `gitlab_url`.
+- A path in the tenant's own folder reads from the cluster on:
+  `path`, `override_path`, `layers[].path`, `deploy.layers[].path`,
+  `deploy.provenance`'s files, a finding's `path`, a diff's `old_path` and
+  `new_path`, `own_folder`. The MCE layer reads
+  `sites/<site>/<env>/mces/[hidden]/values.yaml`; send these paths back as
+  read in `merge-preview`'s `override_path`.
+- Every text names the MCEs, the hub (`prod-hub`, `prod-hub-upi`), the UPI
+  and KV clusters as `[hidden]`.
+- Approvals, audit merge requests and commits are those about a tenant or
+  the hosted clusters' scope; a diff has a tenant's own files and the team's
+  `operators/` and `defaults/hosted-clusters/` files; one with none is `404`.
+- Lints and every `warnings` list: the findings about a tenant or no
+  destination.
+- Catalog `fleet_defaults`, `GET /fleet-defaults` and the add-on pages: the
+  hosted clusters' scope alone, counting and listing tenants;
+  `unregistered` is `[]`; a chart only another scope's default is `404`.
+- `GET /teams/{team}/addon-template` is an admin's (`403`).
+
 ## Errors
 
 Every error is `application/problem+json` with `type, title, status, detail,
