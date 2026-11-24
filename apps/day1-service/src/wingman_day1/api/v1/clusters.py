@@ -4,24 +4,21 @@ Reads need a session (``CurrentUser``), but a cluster's nodes, the servers
 it runs on, need an admin (ADR-0038, amended 2026-11-23); every change needs
 an admin (``AdminUser``). A create starts the provision-cluster workflow
 (ADR-0042); an edit or a delete is a merge request. Static paths come before
-``/{name}`` so a cluster can never shadow them.
+``/{name}`` so a cluster can never shadow them. Live status has its own module,
+``cluster_status.py``.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse
 
-from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
+from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes
 from wingman_day1.api.v1.cluster_network_schemas import ClusterNetworkOut
 from wingman_day1.api.v1.cluster_nodes_schemas import ClusterNodesOut, UninstallNodeIn
-from wingman_day1.api.v1.cluster_status_schemas import BulkStatusIn, ClusterLiveStatusOut
 from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncOut, SyncPreviewIn, SyncPreviewOut
 from wingman_day1.api.v1.cluster_workflows_schemas import (
     DeleteWorkflowOut,
@@ -51,10 +48,9 @@ from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.upgrades import upgrade_hints
-from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Choice
-from wingman_day1.domain.visibility import require_seen, seen, sees_cluster
+from wingman_day1.domain.visibility import require_seen, seen
 from wingman_day1.integrations.segments_manager.domain.links import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
@@ -136,19 +132,6 @@ async def name_suggestion(
     )
 
 
-@router.post("/bulk-status")
-async def bulk_status(
-    body: BulkStatusIn, user: CurrentUser, status: Status
-) -> dict[str, ClusterLiveStatusOut]:
-    """Live status of many clusters; each failure is in its entry's ``error``.
-
-    A KV cluster a viewer names is left out of the answer, as an unknown one would be.
-    """
-    asked = [(c.name, c.mce) for c in body.clusters if sees_cluster(user, c.name, mce=c.mce)]
-    results = await status.statuses(asked)
-    return {name: ClusterLiveStatusOut.of(s) for name, s in results.items()}
-
-
 @router.post("/preview")
 async def preview_cluster(body: CreateClusterIn, context: Context, user: AdminUser) -> PreviewOut:
     """Exactly the file a create hands provision-cluster, after every check a create runs."""
@@ -168,36 +151,6 @@ async def create_cluster(
 
 
 # ── One cluster ──────────────────────────────────────────────────────────────
-
-
-@router.get("/{name}/status")
-async def cluster_status(
-    name: str, mce: RequiredMce, user: CurrentUser, status: Status
-) -> ClusterLiveStatusOut:
-    """The HostedCluster and NodePools on the MCE hub (501 when status is off)."""
-    require_seen(user, name, mce=mce)
-    return ClusterLiveStatusOut.of(await status.status(name, mce))
-
-
-@router.get("/{name}/status/stream")
-async def stream_cluster_status(
-    name: str, mce: RequiredMce, user: CurrentUser, status: Status, context: Context
-) -> StreamingResponse:
-    """Server-sent events: the live status now, then every ``status_poll_seconds``."""
-    require_seen(user, name, mce=mce)
-
-    async def events() -> AsyncIterator[str]:
-        try:
-            async for live in status.watch(name, mce, interval=context.status_poll_seconds):
-                yield f"data: {ClusterLiveStatusOut.of(live).model_dump_json()}\n\n"
-        except (Day1Error, GitError) as exc:
-            yield f"data: {json.dumps({'error': f'{type(exc).__name__}: {exc}'})}\n\n"
-
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 @router.get("/{name}/history")

@@ -14,6 +14,7 @@ from wingman_day1.api.v1 import agent_labels as agent_labels_api
 from wingman_day1.api.v1 import approvals as approvals_api
 from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
+from wingman_day1.api.v1 import cluster_status as cluster_status_api
 from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import inventory as inventory_api
 from wingman_day1.api.v1 import placement as placement_api
@@ -29,6 +30,7 @@ from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_RO
 ROUTERS: Final[tuple[APIRouter, ...]] = (
     auth_api.router,
     clusters_api.router,
+    cluster_status_api.router,
     sites_api.sites_router,
     sites_api.mces_router,
     specs_api.router,
