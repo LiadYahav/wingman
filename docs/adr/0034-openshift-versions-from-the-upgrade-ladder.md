@@ -107,9 +107,11 @@ A release is compared without any architecture OpenShift publishes, not
 only `-x86_64`: `x86_64`, `aarch64`, `ppc64le`, `s390x` and `multi` come
 off as the tag's last part, so `4.20.44-aarch64` is `4.20.44` too, and a
 prerelease keeps its name (`4.20.0-rc.1-x86_64` is `4.20.0-rc.1`, no rung).
-The rule is `wingman_core.domain.release_tags.without_arch`; before, day1
-removed `-x86_64` alone, in two places, and its Quick Links cut a hub's
-version at its first `-`. The ladder itself stays bare (`4.N.N`).
+The rule is `wingman_core.domain.release_tags.without_arch`, and the web's
+`lib/release-tags.ts` (`withoutArch`, `offeredRelease`) for the create
+form's and the flavor preview's preset; before, day1 removed `-x86_64`
+alone, in two places, the web too, in two more, and day1's Quick Links cut
+a hub's version at its first `-`. The ladder itself stays bare (`4.N.N`).
 
 A cluster file's `mastertag` is checked against the same module's
 `is_release_tag`, the tags the hostedclusters-setup chart renders into a
