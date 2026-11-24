@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { isApiError } from "@/lib/api-client";
 import { useInventory } from "@/lib/api/inventory";
+import { mceServersHref } from "@/lib/infrastructure";
 import { serverCapacity, type MceCapacity } from "@/lib/overview/capacity";
 import { plural } from "@/lib/utils";
 import { CapacityRow, CapacityTotal } from "./capacity-row";
@@ -49,7 +50,7 @@ function ServersBody() {
       <CapacityTotal free={capacity.free} what={`free across ${plural(capacity.mces.length, "MCE")}`} data-testid="overview-servers-total" />
       <div className="-mx-3 space-y-0.5">
         {capacity.mces.slice(0, MCES_SHOWN).map((mce) => (
-          <CapacityRow key={mce.mce} href="/inventory" name={mce.mce} mono context={mce.site} free={mce.free} usedPercent={mce.usedPercent}
+          <CapacityRow key={mce.mce} href={mceServersHref(mce.mce)} name={mce.mce} mono context={mce.site} free={mce.free} usedPercent={mce.usedPercent}
             label={`${mce.mce}: ${mce.free} free of ${plural(mce.servers, "server")}`} data-testid="overview-mce">
             <Pools mce={mce} />
           </CapacityRow>
@@ -67,7 +68,7 @@ function ServersBody() {
   );
 }
 
-/** Inventory Management's numbers: each MCE's free servers, by InfraEnv pool. */
+/** Inventory Management's numbers: each MCE's free servers, by InfraEnv pool, each opening that MCE's servers. */
 export function FreeServersCard() {
   return (
     <OverviewCard

@@ -1,16 +1,21 @@
 "use client";
 
-import { ServerCog, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, ServerCog, TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { customerMcesBySite } from "@/lib/infrastructure";
+import { customerMcesBySite, mceServersHref } from "@/lib/infrastructure";
 import { plural } from "@/lib/utils";
 import type { Mce } from "@/types";
+import { CreateMcePreview } from "./create-mce-preview";
 import { Chip, OffConvention, PageHeader, SiteHeading } from "./page-parts";
 import { useMces } from "./use-infrastructure";
 
 const CELL = "px-4 py-2.5 align-middle";
+/** Env and hub version have their own columns from `sm` up; on a phone they are a line under the name. */
+const WIDE = "hidden sm:table-cell";
+const NONE = <span className="text-muted-foreground">—</span>;
 
 function MceProblems({ mce }: { mce: Mce }) {
   const lines = [
@@ -32,20 +37,46 @@ function MceProblems({ mce }: { mce: Mce }) {
   );
 }
 
+/**
+ * One Customer MCE. The whole row opens its servers in Inventory Management:
+ * the name is the link, stretched over the row, so a click anywhere, a
+ * middle-click and the keyboard all reach the same place.
+ */
 function MceRow({ mce }: { mce: Mce }) {
   return (
-    <tr className="border-t" data-testid="mce-row" data-mce={mce.name}>
+    <tr
+      className="group relative border-t transition-colors hover:bg-muted/40 active:bg-muted/60 has-[a:focus-visible]:bg-muted/40"
+      data-testid="mce-row"
+      data-mce={mce.name}
+    >
       <td className={CELL}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[13px] font-medium break-all">{mce.name}</span>
-          <OffConvention problems={mce.naming_problems} testId="mce-off-convention" />
+          <Link
+            href={mceServersHref(mce.name)}
+            aria-label={`${mce.name}: its servers in Inventory Management`}
+            className="font-mono text-[13px] font-medium break-all outline-none after:absolute after:inset-0 after:rounded-sm focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring/60"
+            data-testid="mce-link"
+          >
+            {mce.name}
+          </Link>
+          {/* Above the stretched link, so its tooltip opens rather than the row */}
+          <span className="relative z-10"><OffConvention problems={mce.naming_problems} testId="mce-off-convention" /></span>
         </div>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:hidden" data-testid="mce-row-facts">
+          {mce.env && <Chip>{mce.env}</Chip>}
+          {mce.hub_version && <span className="font-mono">hub {mce.hub_version}</span>}
+        </p>
         <MceProblems mce={mce} />
       </td>
-      <td className={CELL}>{mce.env ? <Chip>{mce.env}</Chip> : <span className="text-muted-foreground">—</span>}</td>
-      <td className={`${CELL} font-mono text-xs`}>{mce.hub_version ?? <span className="text-muted-foreground">—</span>}</td>
-      <td className={`${CELL} font-mono text-xs`}>{mce.default_mastertag ?? <span className="text-muted-foreground">—</span>}</td>
+      <td className={`${CELL} ${WIDE}`}>{mce.env ? <Chip>{mce.env}</Chip> : NONE}</td>
+      <td className={`${CELL} ${WIDE} font-mono text-xs`}>{mce.hub_version ?? NONE}</td>
       <td className={`${CELL} text-right tabular-nums font-semibold`}>{mce.cluster_count}</td>
+      <td className="py-2.5 pr-3 align-middle">
+        <ChevronRight
+          aria-hidden
+          className="ml-auto h-4 w-4 text-muted-foreground/60 transition-[color,transform] duration-150 group-hover:text-foreground motion-safe:group-hover:translate-x-0.5"
+        />
+      </td>
     </tr>
   );
 }
@@ -55,18 +86,15 @@ function SiteMces({ site, mces }: { site: string; mces: Mce[] }) {
     <section className="space-y-2" aria-label={`Site ${site}`} data-testid="mce-site" data-site={site}>
       <SiteHeading site={site} count={plural(mces.length, "MCE")} />
       <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-        {/* Fixed columns, so every site's table lines up with the others */}
-        <table className="w-full min-w-[640px] table-fixed text-sm">
-          <colgroup>
-            <col className="w-[42%]" /><col className="w-[10%]" /><col className="w-[18%]" /><col className="w-[18%]" /><col className="w-[12%]" />
-          </colgroup>
+        {/* Fixed columns, so every site's table lines up with the others; the first row's widths set them */}
+        <table className="w-full table-fixed text-sm">
           <thead className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th scope="col" className="px-4 py-2 font-medium">MCE</th>
-              <th scope="col" className="px-4 py-2 font-medium">Env</th>
-              <th scope="col" className="px-4 py-2 font-medium" title="version.yaml: the hub's own OpenShift version">Hub version</th>
-              <th scope="col" className="px-4 py-2 font-medium" title="values.yaml: the mastertag its new hosted clusters start from">Default mastertag</th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">Clusters</th>
+              <th scope="col" className={`${WIDE} w-[14%] px-4 py-2 font-medium`}>Env</th>
+              <th scope="col" className={`${WIDE} w-[24%] px-4 py-2 font-medium`} title="version.yaml: the hub's own OpenShift version">Hub version</th>
+              <th scope="col" className="w-24 px-4 py-2 text-right font-medium">Clusters</th>
+              <th scope="col" className="w-9"><span className="sr-only">Servers</span></th>
             </tr>
           </thead>
           <tbody>
@@ -80,14 +108,21 @@ function SiteMces({ site, mces }: { site: string; mces: Mce[] }) {
 
 function Body() {
   const mces = useMces();
-  if (mces.isLoading) return <div className="space-y-3"><Skeleton className="h-5 w-32" /><Skeleton className="h-40 w-full rounded-xl" /></div>;
+  if (mces.isLoading) {
+    return (
+      <div className="space-y-2" aria-busy="true" data-testid="mces-loading">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+    );
+  }
   if (mces.error) return <ProblemList error={mces.error} title="The MCEs could not be read from the day1 repo" />;
   const sites = customerMcesBySite(mces.data ?? []);
   if (sites.length === 0) {
     return (
       <EmptyState
         icon={ServerCog} bordered title="No Customer MCEs"
-        description="Each is a folder of the day1 repo, sites/<site>/mces/<mce>/; Wingman lists them and never creates one."
+        description="Each is a folder of the day1 repo, sites/<site>/mces/<mce>/, installed by hand today; Wingman lists them and creates none. Create MCE previews how one will be made."
         data-testid="mces-empty"
       />
     );
@@ -97,16 +132,21 @@ function Body() {
 
 /**
  * Customer MCEs (ADR-0067, ADR-0018): the hubs of the customers' hosted
- * clusters, by site, as the day1 repo's folders say them. Read only: Wingman
- * never creates or changes an MCE. The seeds are on their own page.
+ * clusters, by site, as the day1 repo's folders say them, each opening its
+ * servers in Inventory Management. Read only: Wingman never creates or
+ * changes an MCE, and Create MCE is a preview of how one will be made
+ * (ADR-0018's 2026-11-24 amendment). The seeds are on their own page.
  */
 export function MceList() {
+  const mces = useMces();
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-300">
       <PageHeader
         title="Customer MCEs"
-        subtitle="The hubs that host the customers' hosted clusters, by site, read from the day1 repo. Wingman never creates or changes one; placement picks among them for a new cluster."
-      />
+        subtitle="The hubs of the customers' hosted clusters, by site, as the day1 repo has them; each opens its servers in Inventory Management. Placement picks among them for a new cluster."
+      >
+        <CreateMcePreview mces={mces.data ?? []} />
+      </PageHeader>
       <Body />
     </div>
   );

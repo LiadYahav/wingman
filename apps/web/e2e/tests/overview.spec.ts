@@ -130,7 +130,7 @@ test.describe("Where the customers' clusters run (Infrastructure)", () => {
 });
 
 test.describe("Capacity (Infrastructure)", () => {
-  test("free servers per MCE, each opening Inventory Management", async ({ page }) => {
+  test("free servers per MCE, each opening that MCE's servers in Inventory Management", async ({ page }) => {
     await openOverview(page, {
       clusters: UPGRADES_OFF,
       path: "/infrastructure",
@@ -144,7 +144,7 @@ test.describe("Capacity (Infrastructure)", () => {
     const mces = servers.getByTestId("overview-mce");
     await expect(mces).toHaveCount(2);
     await expect(mces.nth(0)).toHaveAccessibleName("ocp4-prod-mce-site1-a: 6 free of 16 servers");
-    await expect(mces.nth(0)).toHaveAttribute("href", "/inventory");
+    await expect(mces.nth(0)).toHaveAttribute("href", "/inventory?mce=ocp4-prod-mce-site1-a");
     // The most free pool first, the servers no single InfraEnv names last; one free server cannot be used now
     await expect(mces.nth(0).getByTestId("overview-pools")).toHaveText(
       "r650-mtl-az12hp-gen12-site1-64c-512gb0no single InfraEnv41 not usable"

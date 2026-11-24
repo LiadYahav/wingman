@@ -43,7 +43,7 @@ Status: Proposed | Accepted | Parked YYYY-MM-DD | Superseded by ADR-NNNN | Super
 | [0015](0015-cluster-name-derivation-setting.md) | How a file stem becomes the chart's `clusterName` is a setting; production's rule is the default |
 | [0016](0016-day1-records-addons-and-drift-is-addon-drift.md) | Day1 records a spec's addons and overrides, never writes day2 (superseded in part by 0044: a rollout asks day2 for install MRs), and unknown drift is not "in sync" |
 | [0017](0017-cluster-provisioner-port.md) | Provisioning is a `ClusterProvisioner` port: a merge request today, the `create-cluster` workflow later |
-| [0018](0018-sites-and-mces-are-read-only.md) | Sites and MCEs are read-only folders in Wingman |
+| [0018](0018-sites-and-mces-are-read-only.md) | Sites and MCEs are read-only folders in Wingman (amended 2026-11-24: Customer MCEs' Create MCE is a preview of the platform's design, its Create disabled with the reason; it calls no API and writes nothing) |
 | [0019](0019-hub-api-over-httpx.md) | MCE hubs, OpenShift OAuth and day2 are reached over httpx, behind ports, with failures reported |
 | [0020](0020-day2-four-destination-kinds.md) | day2 models four destination kinds, discovered from folders and day1, each with an id that carries its position (amended 2026-11-13: the web's Destinations page is removed; the API and the concept stay) |
 | [0021](0021-value-stacks-with-provenance-checked-by-the-oracle.md) | The values preview is the platform's exact stack with Helm's merge and per-key provenance, held to render_chain.py by an oracle test |
