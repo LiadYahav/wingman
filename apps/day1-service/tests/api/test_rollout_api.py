@@ -116,7 +116,7 @@ async def test_merging_a_flavor_version_opens_one_mr_per_cluster(
     await context.rollouts.wait()
     assert sorted(await open_rollouts(gitlab, support)) == sorted([LARK, HERZI])
 
-    status = await client.get(f"/api/day1/specs/{FLAVOR}/rollout", headers=auth(support.VIEWER))
+    status = await client.get(f"/api/day1/specs/{FLAVOR}/rollout", headers=auth(support.ALICE))
     assert status.status_code == 200, status.text
     rollout = status.json()
     assert (rollout["spec_name"], rollout["version"], rollout["running"]) == (

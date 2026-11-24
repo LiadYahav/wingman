@@ -49,7 +49,7 @@ async def test_the_name_is_suggested_from_the_flavor_and_the_next_letter(
 ) -> None:
     alice = auth(support.ALICE)
     await merged(support, gitlab, flavor("rcs"))
-    viewer = auth(support.VIEWER)
+    viewer = auth(support.ALICE)
 
     first = await client.get(SUGGEST, params={**PROD, "flavor": "rcs"}, headers=viewer)
     assert first.status_code == 200, first.text
@@ -78,7 +78,7 @@ async def test_the_name_is_suggested_from_the_flavor_and_the_next_letter(
 async def test_no_suggestion_under_an_off_convention_mce_and_404_for_unknowns(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    viewer = auth(support.VIEWER)
+    viewer = auth(support.ALICE)
     lab = {"site": "site1", "mce": "ocp4-mce-workflow-test", "flavor": "agent-standard"}
     off = (await client.get(SUGGEST, params=lab, headers=viewer)).json()
     assert off["name"] is None

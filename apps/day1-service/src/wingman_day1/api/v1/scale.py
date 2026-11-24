@@ -18,7 +18,7 @@ from fastapi import APIRouter, Query
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context, Scale
 from wingman_day1.api.v1.scale_schemas import ScaleIn, ScaleOptionsOut, ScaleRunOut
-from wingman_day1.api.v1.visible import cluster_ref
+from wingman_day1.api.v1.visible import cluster_ref, shown
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["scale"])
 
@@ -31,9 +31,8 @@ async def scale_options(
     name: str, context: Context, scale: Scale, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ScaleOptionsOut:
     """The cluster file's NodePools, each named by the chart's rule, and the flavor's locks."""
-    return ScaleOptionsOut.of(
-        await scale.options(await cluster_ref(context, user, name, site, mce))
-    )
+    options = await scale.options(await cluster_ref(context, user, name, site, mce))
+    return await shown(context, user, ScaleOptionsOut.of(options))
 
 
 @router.post("/{name}/scale", status_code=202)
@@ -60,4 +59,6 @@ async def scale_run(
     For a viewer, ``result.chosen`` and ``result.deleting`` are empty: they name servers.
     """
     run = await scale.run(await cluster_ref(context, user, name, site, mce))
-    return ScaleRunOut.of(run if user.is_admin else run.without_servers())
+    return await shown(
+        context, user, ScaleRunOut.of(run if user.is_admin else run.without_servers())
+    )

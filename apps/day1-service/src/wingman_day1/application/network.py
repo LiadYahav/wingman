@@ -25,13 +25,16 @@ class NetworkService:
         self._clusters = clusters
         self._ledger = ledger
 
-    async def network(self, ref: ClusterRef) -> NetworkView:
-        """The cluster's network; a missing file is ``NotFoundError``, as for the detail."""
+    async def network(self, ref: ClusterRef, *, ledger: bool = True) -> NetworkView:
+        """The cluster's network; a missing file is ``NotFoundError``, as for the detail.
+
+        ``ledger`` false never asks segments-manager: a viewer's is the file's alone (ADR-0068).
+        """
         values = await self._clusters.values(ref)
         file = file_network(
             values.vlan_id if values else None, values.dhcp_network if values else None
         )
-        if self._ledger is None or file.segment is None:
+        if not ledger or self._ledger is None or file.segment is None:
             return unchecked(file)
         try:
             record = await self._ledger.segment(file.segment)

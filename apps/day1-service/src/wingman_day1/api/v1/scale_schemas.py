@@ -10,6 +10,7 @@ from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.application.scale import ScaleOptions, ScaleTarget
 from wingman_day1.domain.scale import (
     ChosenServer,
@@ -124,7 +125,7 @@ class ScaleOptionsOut(BaseModel):
     """``GET .../scale``: what Scale offers for the cluster, one NodePool at a time."""
 
     cluster: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     flavor: str | None
     nodepools: list[ScaleNodePoolOut]
 

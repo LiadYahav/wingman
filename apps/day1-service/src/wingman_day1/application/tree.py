@@ -11,8 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from wingman_core.domain.cluster_kinds import HostedClusterKind, MceKind, mce_kind
 from wingman_core.domain.errors import NotFoundError
-from wingman_core.domain.git import EntryKind
+from wingman_core.domain.git import EntryKind, RepoPath
+from wingman_core.domain.redaction import Redactor
 from wingman_day1.domain import paths
 from wingman_day1.domain.paths import ClusterRef, HostedClustersEntry
 from wingman_day1.ports import RepoReads
@@ -44,6 +46,20 @@ class Day1Tree:
     def find(self, name: str) -> list[ClusterRef]:
         """Clusters with this file stem, under any MCE."""
         return [ref for ref in self.clusters if ref.name == name]
+
+    @property
+    def infrastructure(self) -> Redactor:
+        """Every name a viewer never reads (ADR-0068): each MCE folder's and KV cluster's."""
+        kv = (ref.name for ref in self.clusters if ref.kind is HostedClusterKind.KV)
+        return Redactor.of([*(mce for _, mce in self.mces), *kv])
+
+    def tenant_folders(self) -> list[RepoPath]:
+        """Each Customer MCE's ``hostedClusters/``: where a tenant's cluster files are."""
+        return [
+            paths.hosted_clusters_dir(site, mce)
+            for site, mce in self.mces
+            if mce_kind(mce) is MceKind.MCE
+        ]
 
 
 async def read_tree(day1: RepoReads) -> Day1Tree:

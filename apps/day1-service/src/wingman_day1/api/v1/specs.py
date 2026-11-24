@@ -26,6 +26,7 @@ from wingman_day1.api.v1.specs_schemas import (
     SpecDriftOut,
     SpecOut,
 )
+from wingman_day1.api.v1.visible import all_shown, shown
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.imports import ImportPick, ImportResult
@@ -67,8 +68,10 @@ async def template_schema(
 
 @router.get("/{name}/history")
 async def spec_history(name: Name, context: Context, user: CurrentUser) -> list[CommitOut]:
-    """Commits that changed the spec's file."""
-    return [CommitOut.of(c) for c in await context.specs.history(name)]
+    """Commits that changed the spec's file; a viewer's name no MCE (ADR-0068)."""
+    return await all_shown(
+        context, user, [CommitOut.of(c) for c in await context.specs.history(name)]
+    )
 
 
 @router.get("/{name}/at/{sha}", response_class=PlainTextResponse)
@@ -84,8 +87,8 @@ async def spec_at(
 
 @router.get("/{name}/clusters")
 async def spec_clusters(name: Name, context: Context, user: CurrentUser) -> list[SpecClusterOut]:
-    """Clusters created from the spec, with their drift; a viewer's has no KV cluster."""
-    return [
+    """Clusters created from the spec, with their drift; a viewer's has no KV cluster, no MCE."""
+    rows = [
         SpecClusterOut(
             name=d.ref.name,
             site=d.ref.site,
@@ -98,12 +101,13 @@ async def spec_clusters(name: Name, context: Context, user: CurrentUser) -> list
         )
         for d in seen(user, await context.drift.for_spec(name), _ref_of)
     ]
+    return await all_shown(context, user, rows)
 
 
 @router.get("/{name}/drift")
 async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[SpecDriftOut]:
-    """Drift of every cluster created from the spec; a viewer's has no KV cluster."""
-    return [
+    """Drift of every cluster created from the spec; a viewer's has no KV cluster, no MCE."""
+    rows = [
         SpecDriftOut(
             cluster=d.ref.name,
             site=d.ref.site,
@@ -116,6 +120,7 @@ async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[Sp
         )
         for d in seen(user, await context.drift.for_spec(name), _ref_of)
     ]
+    return await all_shown(context, user, rows)
 
 
 @router.get("/{name}/rollout")
@@ -123,11 +128,13 @@ async def rollout_status(name: Name, context: Context, user: CurrentUser) -> Rol
     """The rollout of the flavor's newest version, one MR per cluster (ADR-0044).
 
     From GitLab's state; reading it starts a run when work is pending (the
-    fallback trigger). A viewer's has no KV cluster (ADR-0067).
+    fallback trigger). A viewer's has no KV cluster (ADR-0067) and no MCE or path (ADR-0068).
     """
     status = await context.rollouts.read(name)
-    shown = seen(user, status.clusters, lambda c: c.cluster.ref)
-    return RolloutStatusOut.of(replace(status, clusters=tuple(shown)))
+    clusters = seen(user, status.clusters, lambda c: c.cluster.ref)
+    return await shown(
+        context, user, RolloutStatusOut.of(replace(status, clusters=tuple(clusters)))
+    )
 
 
 @router.post("/{name}/rollout", status_code=202)

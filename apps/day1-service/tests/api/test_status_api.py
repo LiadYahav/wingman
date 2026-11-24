@@ -77,9 +77,12 @@ async def test_status_has_the_legacy_shape_and_names_the_hosted_cluster(
     }
 
 
-async def test_status_needs_the_mce(client: httpx.AsyncClient, auth: Auth, support: Any) -> None:
-    response = await client.get(f"/api/day1/clusters/{HERZI}/status", headers=auth(support.VIEWER))
-    assert response.status_code == 422
+async def test_status_without_the_mce_reads_the_clusters_folder_in_the_tree(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    for user in (support.ALICE, support.VIEWER):
+        response = await client.get(f"/api/day1/clusters/{HERZI}/status", headers=auth(user))
+        assert (response.status_code, response.json()["ocp_version"]) == (200, "4.16.27")
 
 
 async def test_an_unreachable_hub_is_an_error_in_a_200(
@@ -96,10 +99,15 @@ async def test_an_unreachable_hub_is_an_error_in_a_200(
         transport=httpx.ASGITransport(app=app), base_url="http://day1.test"
     ) as client:
         response = await client.get(
+            f"/api/day1/clusters/{HERZI}/status", params={"mce": MCE}, headers=auth(support.ALICE)
+        )
+        shown = await client.get(
             f"/api/day1/clusters/{HERZI}/status", params={"mce": MCE}, headers=auth(support.VIEWER)
         )
     assert response.status_code == 200
     assert response.json()["error"].startswith("HubUnavailable:")
+    # A viewer reads that it failed, never the hub's words (ADR-0068)
+    assert shown.json()["error"] == "the cluster's live status could not be read"
 
 
 async def test_bulk_status_has_an_entry_for_every_cluster(
@@ -107,7 +115,7 @@ async def test_bulk_status_has_an_entry_for_every_cluster(
 ) -> None:
     body = {"clusters": [{"name": HERZI, "mce": MCE}, {"name": "ocp4-prod-hawk-site1", "mce": MCE}]}
     statuses = (
-        await client.post("/api/day1/clusters/bulk-status", json=body, headers=auth(support.VIEWER))
+        await client.post("/api/day1/clusters/bulk-status", json=body, headers=auth(support.ALICE))
     ).json()
     assert set(statuses) == {HERZI, "ocp4-prod-hawk-site1"}
     assert statuses[HERZI]["error"] is None
@@ -209,13 +217,34 @@ async def test_the_status_stream_of_a_cluster_not_on_the_hub_reports_the_error(
     app: FastAPI, auth: Auth, support: Any
 ) -> None:
     # Not merged yet: the HostedCluster name is derived from the file name, and the
-    # hub's 404 arrives as an event with ``error`` set, not as a broken stream.
+    # hub's 404 arrives as an event with ``error`` set, not as a broken stream. Only an
+    # admin names its MCE: a viewer's cluster is found in the tree (ADR-0068).
     event = await first_event(
         app,
         "/api/day1/clusters/ocp4-prod-new-site1/status/stream",
         f"mce={MCE}",
-        auth(support.VIEWER),
+        auth(support.ALICE),
     )
     body = json.loads(event.removeprefix("data: "))
     assert body["hosted_cluster"] == "ocp4-prod-new-site1"
     assert body["error"].startswith("HubObjectNotFound:")
+
+
+async def test_a_viewers_stream_is_found_by_name_and_says_no_more_than_that_it_failed(
+    support: Any, gitlab: Any, identity: Any, clock: Any, auth: Auth
+) -> None:
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=FakeHubApi(unavailable=[MCE]),
+        identity=identity,
+        day2=FakeDay2Addons(),
+        clock=clock,
+    )
+    # No mce, and a wrong one: a viewer's cluster is the tree's (ADR-0068)
+    for query in ("", "mce=ocp4-prod-mce-site1-z"):
+        event = await first_event(
+            app, f"/api/day1/clusters/{HERZI}/status/stream", query, auth(support.VIEWER)
+        )
+        body = json.loads(event.removeprefix("data: "))
+        assert body["error"] == "the cluster's live status could not be read"
+        assert MCE not in event

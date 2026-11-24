@@ -15,7 +15,8 @@ class BulkStatusItemIn(_In):
     """One cluster to read live status for."""
 
     name: str = Field(min_length=1, max_length=63)
-    mce: str = Field(min_length=1, max_length=63)
+    mce: str | None = Field(default=None, min_length=1, max_length=63)
+    """An admin's: the hub to read. Without it, and for every viewer, the tree's (ADR-0068)."""
 
 
 class BulkStatusIn(_In):

@@ -56,7 +56,7 @@ async def test_expanding_an_mr_without_repo_reaches_the_day1_project(
     # Legacy: ?repo= was required, and the audit page's expand (which sends none)
     # answered 422 for every day1 MR.
     mr = await open_cluster_mr(client, auth, support)
-    response = await client.get(f"/api/day1/approvals/{mr['iid']}", headers=auth(support.VIEWER))
+    response = await client.get(f"/api/day1/approvals/{mr['iid']}", headers=auth(support.ALICE))
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["mr"]["repo"] == "day1"

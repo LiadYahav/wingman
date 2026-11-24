@@ -172,9 +172,12 @@ Changes since the legacy services:
 ### Day1 Service (Port 8001)
 
 `site` and `mce` query parameters are optional on a cluster's routes: cluster names are unique.
-A viewer never knows of a seed, a KV cluster or an MCE (ADR-0067): a KV cluster is answered
+They are an admin's: a viewer's cluster is found by its name, whatever they say.
+A viewer never knows of a seed, a KV cluster or an MCE (ADR-0067, ADR-0068): a KV cluster is answered
 as a missing cluster (`404`), every list a viewer reads leaves it out, and the sites, MCEs,
-placement and Inventory Management are admins' reads (`403`). The same holds in day2.
+placement and Inventory Management are admins' reads (`403`). A viewer's answers have every
+`mce`, file path and repo link `null`, every text with the MCEs' and KV clusters' names as
+`[hidden]`, and of a diff the tenant clusters' files alone, by file name. The same holds in day2.
 
 #### Login and build
 
@@ -195,8 +198,8 @@ placement and Inventory Management are admins' reads (`403`). The same holds in 
 | `GET` | `/api/day1/clusters/{name}/provision-run` | The new cluster's provision-cluster run: the workflow's status, phase, merge request and error (404 none) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would hand the workflow, after every check a create runs (with placement on, the MCE against the placement rule: an override of Wingman's pick needs `placement.reason`) |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
-| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
-| `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
+| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040; admins) |
+| `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters (each `{name}`, an admin's with its `mce`; ADR-0068) |
 | `GET` | `/api/day1/clusters/{name}` | The cluster's file, values, `kind` and naming (`naming.zone`: a KV cluster's zone); a KV cluster is a `404` for a viewer |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
 | `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file). A KV cluster's needs its name, `?confirm=<name>` (`422` otherwise), and its MR says the tenants' VM workers it hosts go with it (ADR-0067) |
@@ -221,7 +224,7 @@ placement and Inventory Management are admins' reads (`403`). The same holds in 
 | `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its flavor: the locked values its file does not hold, and its missing Day2 add-ons |
 | `POST` | `/api/day1/clusters/{name}/sync/preview` | What syncing the cluster to its flavor would write: each locked value it does not hold, the configs removed, the nodepools whose nodes roll, and what blocks it (`hardware` choices when a nodepool's network config can't be read) |
 | `POST` | `/api/day1/clusters/{name}/sync` | Open one day1 MR that sets those values; refused unless `confirm_removals` names exactly the preview's removals. With `DAY1_SCALE_NODEPOOLS`, drifted locked replicas are not in it: the preview and the answer list them in `held_replicas`, each restored through update-nodepool (ADR-0062) |
-| `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (`?mce=`; 501 when live status is off) |
+| `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (an admin's `?mce=`, else the cluster's folder; 501 when live status is off) |
 | `GET` | `/api/day1/clusters/{name}/status/stream` | The same as server-sent events, every `DAY1_STATUS_POLL_SECONDS` |
 
 #### Sites and MCEs (read-only, ADR-0018; admins only, ADR-0067)

@@ -8,10 +8,11 @@ the provision and delete workflows (``cluster_workflows_schemas.py``).
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.api.v1.schemas import MAX_FILE_BYTES, DriftStateOut, FlavorUpdateOut, _In, _iso
 from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
@@ -90,7 +91,8 @@ class ClusterStatusOut(BaseModel):
 
     name: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
+    """The MCE folder; ``null`` for a viewer, who never knows of the MCEs (ADR-0068)."""
     kind: ClusterKindOut
     phase: Literal["Provisioning", "Ready", "Error", "Deleting", "Unknown"] = "Unknown"
     spec_name: str | None
@@ -100,7 +102,8 @@ class ClusterStatusOut(BaseModel):
     created_at: str | None
     is_drifted: bool = False
     mastertag: str | None
-    path: str
+    path: Annotated[str | None, ADMIN_ONLY]
+    """The file in the day1 repo; ``null`` for a viewer (its folders name the MCE)."""
     hosted_cluster: HostedClusterOut
     naming: NamingOut
     owner: dict[str, str]
@@ -166,7 +169,7 @@ class ClusterMetadataOut(BaseModel):
     created_by: str
     created_at: str | None
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     variables: dict[str, Any] = Field(default_factory=dict)
     """Always empty: the inputs of a render are not stored (see the API-changes note)."""
     immutable_paths: list[str] = Field(default_factory=list)
@@ -260,21 +263,22 @@ class ClusterDetailOut(BaseModel):
 
     name: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
+    """``null`` for a viewer, as every field that names the MCE (ADR-0068)."""
     kind: ClusterKindOut
     """A KV cluster is managed like a tenant's; only its delete asks for its name (ADR-0067)."""
     yaml: str
-    gitlab_url: str
-    path: str
+    gitlab_url: Annotated[str | None, ADMIN_ONLY]
+    path: Annotated[str | None, ADMIN_ONLY]
     last_commit_id: str
     """Send it back with an edit or delete: a stale one is refused (409)."""
     metadata: ClusterMetadataOut
     values: ClusterValuesOut | None
     hosted_cluster: HostedClusterOut
     naming: NamingOut
-    mce_default_mastertag: str | None
+    mce_default_mastertag: Annotated[str | None, ADMIN_ONLY]
     problems: list[str]
-    segments_manager: SegmentsManagerOut | None
+    segments_manager: Annotated[SegmentsManagerOut | None, ADMIN_ONLY]
     """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set."""
 
 
@@ -359,7 +363,7 @@ class DriftSummaryItemOut(BaseModel):
 
     name: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     state: DriftStateOut
     is_drifted: bool | None
     error: str | None
