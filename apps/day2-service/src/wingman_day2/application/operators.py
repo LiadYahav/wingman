@@ -11,11 +11,12 @@ override and its own deploy config, if any.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
 from wingman_core.domain.git import RepoPath
+from wingman_core.domain.users import User
 from wingman_day2.application.access import AccessService
 from wingman_day2.application.apps import LoadedLayer, load_deploy, load_layers
 from wingman_day2.application.authoring import AuthoringService
@@ -31,6 +32,7 @@ from wingman_day2.domain.platform import AppSource, scope_exclusions
 from wingman_day2.domain.stacks import Layer, LayerRole
 from wingman_day2.domain.sync_policy import SyncSettings
 from wingman_day2.domain.teams import TeamAccess
+from wingman_day2.domain.visibility import sees_scope
 from wingman_day2.ports import SigsRepository
 
 
@@ -160,6 +162,11 @@ def _read_commit(layers: Sequence[LoadedLayer]) -> str | None:
     return next((x.file.last_commit_id for x in layers if x.file is not None), None)
 
 
+def _seen(scopes: Iterable[DefaultsScope], user: User | None) -> list[DefaultsScope]:
+    """The ``scopes`` ``user`` may know of; every one without a user."""
+    return [s for s in scopes if user is None or sees_scope(user, s)]
+
+
 class OperatorService:
     """Read a team's operators."""
 
@@ -179,23 +186,30 @@ class OperatorService:
         self._access = access
 
     @staticmethod
-    def charts(state: TeamState) -> list[str]:
-        """Every chart in ``operators/`` or in a defaults folder of the team, by name."""
+    def charts(state: TeamState, user: User | None = None) -> list[str]:
+        """Every chart in ``operators/`` or in a defaults folder of the team, by name.
+
+        Of the defaults folders, those of the scopes ``user`` may know of (ADR-0068).
+        """
         tree = state.repo.tree
         names = set(tree.subdirs(RepoPath.of(layout.OPERATORS)))
-        for scope in DefaultsScope:
+        for scope in _seen(DefaultsScope, user):
             names.update(tree.subdirs(layout.defaults_dir(scope)))
         return sorted(names)
 
-    async def summaries(self, team: str) -> list[OperatorSummary]:
-        """The team's operators."""
+    async def _topology_for(self, user: User | None) -> Topology:
         topology = await self._topology.load()
+        return topology if user is None else topology.visible_to(user)
+
+    async def summaries(self, team: str, user: User | None = None) -> list[OperatorSummary]:
+        """The team's operators, as ``user`` may know of them (everything without one)."""
+        topology = await self._topology_for(user)
         state = topology.team(team)
         access = await self._access.of(state.team)
         entries = {e.chart: e for e in await self._catalog.entries(team)}
         tree = state.repo.tree
         found = []
-        for chart in self.charts(state):
+        for chart in self.charts(state, user):
             defaults = tuple(
                 DefaultSummary(
                     scope,
@@ -206,7 +220,7 @@ class OperatorService:
                         if e.chart == chart and e.ref.defaults_scope is scope
                     ),
                 )
-                for scope in SCOPE_ORDER
+                for scope in _seen(SCOPE_ORDER, user)
                 if tree.is_dir(layout.defaults_dir(scope).child(chart))
             )
             entry = entries.get(chart)
@@ -230,11 +244,15 @@ class OperatorService:
             )
         return found
 
-    async def detail(self, team: str, chart: str) -> OperatorView:
-        """One operator of the team; 404 when neither its catalog folder nor a default exists."""
-        topology = await self._topology.load()
+    async def detail(self, team: str, chart: str, user: User | None = None) -> OperatorView:
+        """One operator of the team; 404 when neither its catalog folder nor a default exists.
+
+        As ``user`` may know of it: a viewer's has the hosted clusters' scope alone,
+        and of its destinations the tenants' clusters (ADR-0068).
+        """
+        topology = await self._topology_for(user)
         state = topology.team(team)
-        if chart not in self.charts(state):
+        if chart not in self.charts(state, user):
             raise UnknownChartError(
                 f"team {team} has no operators/{chart}/ and no fleet default of it",
                 details={"team": team, "chart": chart},
@@ -271,7 +289,10 @@ class OperatorService:
             )
             pins.append(OcpVersionPin(version, pin_deploy, pin_values))
         scopes = await asyncio.gather(
-            *(self._scope(topology, state, chart, scope, access) for scope in SCOPE_ORDER)
+            *(
+                self._scope(topology, state, chart, scope, access)
+                for scope in _seen(SCOPE_ORDER, user)
+            )
         )
         return OperatorView(
             team=state.team.name,

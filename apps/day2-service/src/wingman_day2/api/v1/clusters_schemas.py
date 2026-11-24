@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
 from wingman_core.domain.git import Commit
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day2.api.v1.schemas import FileChangeOut, FindingOut, MRDetailOut, _Input, findings
 from wingman_day2.application.catalog import ChartValues
 from wingman_day2.application.changes import ChangeResult
@@ -103,16 +104,16 @@ class ChartValuesOut(BaseModel):
 
 
 class ClusterOut(BaseModel):
-    """One day2 destination."""
+    """One day2 destination; a viewer's ``id`` is its name, ``mce`` and ``argo`` null."""
 
     id: str
     kind: str
     name: str
     site: str
     env: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     ocp_version: str | None
-    argo: str
+    argo: Annotated[str | None, ADMIN_ONLY]
     teams: list[str]
     in_day1: bool
     warnings: list[FindingOut]
@@ -137,10 +138,10 @@ class ClusterOut(BaseModel):
 
 
 class LeafOut(BaseModel):
-    """The leaf ArgoCD Application the platform generates."""
+    """The leaf ArgoCD Application the platform generates (a viewer's ``argo`` is null)."""
 
     app_name: str
-    argo: str
+    argo: Annotated[str | None, ADMIN_ONLY]
     namespace: str
     repo_url: str
     target_revision: str
@@ -177,7 +178,7 @@ class InstalledAddonOut(BaseModel):
     version: str
     override_values: dict[str, Any]
     parse_errors: list[FindingOut] = Field(default_factory=list)
-    gitlab_url: str
+    gitlab_url: Annotated[str | None, ADMIN_ONLY]
     source: str
     path: str
     override_path: str
@@ -232,7 +233,7 @@ class ClusterInstalledOut(BaseModel):
     """Every chart on a cluster (legacy ``cluster``/``mce``/``installed`` kept)."""
 
     cluster: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     id: str
     kind: str
     site: str

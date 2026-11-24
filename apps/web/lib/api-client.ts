@@ -16,6 +16,7 @@
  */
 
 import Cookies from "js-cookie";
+import { forgetStoredQueries } from "@/lib/query-cache";
 import type { ErrorCode, Problem, ProblemDetails, ProblemItem, RequestFieldError } from "@/types/problem";
 
 const TOKEN_COOKIE = "wingman-token";
@@ -154,10 +155,12 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
 
   if (res.status === 401 && redirectOnUnauthorized) {
     clearToken();
-    // Also clear the persisted auth store so the login page doesn't bounce back
+    // Also clear the persisted auth store so the login page doesn't bounce back, and the
+    // stored reads, which are this user's (lib/query-cache.ts)
     try {
       localStorage.removeItem("wingman-auth");
     } catch { /* storage unavailable */ }
+    forgetStoredQueries();
     window.location.assign(new URL("/login", window.location.origin));
   }
   throw error;

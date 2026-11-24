@@ -239,8 +239,10 @@ async def test_a_viewer_reads_the_run_without_the_agents_proposals(
     viewer = (await on.get(f"{BASE}/upgrade-run", headers=auth(support.VIEWER))).json()
     assert [a["target"] for a in admin["pending_actions"]] == ["node/worker-7"]
     assert viewer["pending_actions"] == []
-    assert {k: v for k, v in viewer.items() if k != "pending_actions"} == {
-        k: v for k, v in admin.items() if k != "pending_actions"
+    # Nor its MCE (ADR-0068): the rest is the admin's
+    assert (admin["mce"], viewer["mce"]) == (support.PROD_MCE, None)
+    assert {k: v for k, v in viewer.items() if k not in ("pending_actions", "mce")} == {
+        k: v for k, v in admin.items() if k not in ("pending_actions", "mce")
     }
 
 

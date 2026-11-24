@@ -8,7 +8,7 @@
 import type { Page, Route } from "@playwright/test";
 import type { ClusterDetail, ClusterDrift, ClusterNodes, ScaleOptions, ScaleRun, UpgradeRun } from "../../types";
 import {
-  fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
+  anyQuery, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
 } from "./api-handlers";
 
 export const SITE = "site1";
@@ -121,10 +121,10 @@ export async function openNodes(
   if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
-  await page.route(`**/api/day1/clusters/${LARK}?**`, (r) => json(r, DETAIL));
-  await page.route(`**/api/day1/clusters/${LARK}/drift?**`, (r) => json(r, drift));
-  await page.route(`**/api/day2/clusters/${LARK}/history?**`, (r) => json(r, []));
-  await page.route(`**/api/day2/clusters/${LARK}/addons?**`, (r) =>
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}`), (r) => json(r, DETAIL));
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}/drift`), (r) => json(r, drift));
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/history`), (r) => json(r, []));
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/addons`), (r) =>
     json(r, { cluster: LARK, mce: MCE, id: `hosted:${SITE}:prod:${MCE}:${LARK}`, kind: "hosted", site: SITE, env: "prod",
       ocp_version: "4.18.22", installed: [], excluded: [], warnings: [], argocd_note: "" })
   );

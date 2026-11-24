@@ -57,11 +57,14 @@ function ClusterDetailContent() {
   // drawn as the server drew it, loading, so the first render is the server's.
   const mounted = useMounted();
 
-  // site/mce are optional (cluster names are unique); the detail answers both.
+  // site/mce are optional (cluster names are unique) and an admin's: a viewer's cluster has no MCE and is
+  // read by its name, so a viewer's page never sends one, even from an old link (ADR-0068).
+  const linked = isAdmin ? clusterQuery(searchParams.get("site") ?? "", searchParams.get("mce")) : "";
   const detail = useQuery<ClusterDetail>({
     queryKey: day1Keys.clusters.detail(name),
-    queryFn: () =>
-      day1Api.clusters.detail(name, clusterQuery(searchParams.get("site") ?? "", searchParams.get("mce") ?? "")),
+    queryFn: () => day1Api.clusters.detail(name, linked),
+    // The role is known once mounted (the persisted auth store): only then is it known what to send
+    enabled: mounted,
     staleTime: 30_000,
     // Edits and deletes send this read's last_commit_id: re-read on every visit
     // (a cached or prefetched copy renders meanwhile), so a merge since is seen.
@@ -73,11 +76,16 @@ function ClusterDetailContent() {
   const { error: detailError, refetch: refetchDetail } = detail;
 
   const site = cluster?.site ?? searchParams.get("site") ?? "";
-  const mce = cluster?.mce ?? searchParams.get("mce") ?? "";
+  // The detail's MCE once read (`null`, a viewer's); until then an admin's link's
+  const mce = (cluster ? cluster.mce : isAdmin ? searchParams.get("mce") : null) ?? "";
   const where = clusterQuery(site, mce);
 
   // `null` is status off (501 FEATURE_DISABLED); any other failure is an error to show.
-  const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useClusterLiveStatus(name, mce);
+  const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useClusterLiveStatus(
+    name,
+    mce || null,
+    Boolean(cluster)
+  );
   const statusOn = liveStatus !== null && liveStatus !== undefined;
 
   const driftRead = useQuery<ClusterDrift>({
@@ -102,16 +110,16 @@ function ClusterDetailContent() {
     [name, mce]
   );
 
-  // Prefetch the charts page's data
+  // Prefetch the charts page's data, once the cluster is read
   useEffect(() => {
-    if (!mce) return;
+    if (!cluster) return;
     queryClient.prefetchQuery(chartsQuery);
     queryClient.prefetchQuery({
       queryKey: day2Keys.catalog,
       queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
       staleTime: 120_000,
     });
-  }, [queryClient, chartsQuery, mce]);
+  }, [queryClient, chartsQuery, cluster]);
 
   // `?tab=drift` opens a tab. A viewer never sees the cluster's nodes (ADR-0038): no Nodes tab once the role is known.
   const [requested, setActiveTab] = useState(() => requestedTab(searchParams.get("tab")));
@@ -132,7 +140,7 @@ function ClusterDetailContent() {
   const day2History = useQuery<CommitEntry[]>({
     queryKey: day2Keys.history(name, mce),
     queryFn: () => api.get(day2Api.history(name, mce)),
-    enabled: Boolean(mce) && activeTab === "history",
+    enabled: Boolean(cluster) && activeTab === "history",
     staleTime: 60_000,
   });
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -333,7 +341,7 @@ function ClusterDetailContent() {
               {/* Only when the deployment reads HostedClusters from the hubs; then its nodepools, then its flavor */}
               {liveStatusError ? (
                 <div data-testid="live-status-error">
-                  <ProblemList error={liveStatusError} title="Live status could not be read from the MCE hub" />
+                  <ProblemList error={liveStatusError} title={isAdmin ? "Live status could not be read from the MCE hub" : "Live status could not be read"} />
                 </div>
               ) : (liveStatusLoading || statusOn) && (
                 <LiveStatusCard status={liveStatus ?? undefined} isLoading={liveStatusLoading} />

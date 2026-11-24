@@ -44,7 +44,8 @@ function Upgrading({ cluster, run }: { cluster: ClusterStatus; run: FleetUpgrade
 function Available({ cluster, version, isAdmin }: { cluster: ClusterStatus; version: string; isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const hint =
-    `MCE ${cluster.mce} offers OpenShift ${version}, newer than this cluster's ${cluster.mastertag}. ` +
+    // A viewer's cluster has no MCE (ADR-0068)
+    `${cluster.mce ? `MCE ${cluster.mce}` : "The platform"} offers OpenShift ${version}, newer than this cluster's ${cluster.mastertag}. ` +
     "Only a suggestion: the upgrade workflow plans the path, and may offer other targets, or none.";
   return (
     <span className="inline-flex items-center gap-1.5">

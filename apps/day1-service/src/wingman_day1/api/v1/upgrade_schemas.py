@@ -7,10 +7,11 @@ Responses pass the workflow's strings through.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.application.upgrades import Decided, FleetUpgrade, StartUpgrade
 from wingman_day1.domain.upgrades import (
     AgentVerdict,
@@ -252,7 +253,7 @@ class UpgradeRunOut(BaseModel):
     status: str
     phase: str | None
     waiting_for: str | None
-    mce: str | None
+    mce: Annotated[str | None, ADMIN_ONLY]
     plan: UpgradePlanOut | None
     profile: str | None
     current_step: int | None
@@ -329,8 +330,8 @@ class FleetUpgradeOut(BaseModel):
     cluster: str
     """The cluster file's stem."""
     site: str | None
-    mce: str | None
-    """Where day1 has the file; ``null`` when it has none (or several)."""
+    mce: Annotated[str | None, ADMIN_ONLY]
+    """Where day1 has the file; ``null`` when it has none (or several), and for a viewer."""
     status: str
     started_at: str | None
     """When the upgrade's first segment started."""

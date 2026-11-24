@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { rollText } from "@/components/clusters/sync-rolling";
 import { day1Api, day1Keys } from "@/lib/api/day1";
-import { clusterHref } from "@/lib/clusters";
+import { clusterHref, placeOf } from "@/lib/clusters";
 import { cn, plural } from "@/lib/utils";
 import type { ApprovalRollout, RolloutClusterRef } from "@/types";
 
@@ -77,7 +77,7 @@ function ClusterName({ cluster: c }: { cluster: RolloutClusterRef }) {
       <Link href={clusterHref(c)} className="font-semibold hover:text-primary transition-colors break-all">
         {c.name}
       </Link>
-      <span className="text-xs text-muted-foreground break-all"> · {c.site} / {c.mce}</span>
+      <span className="text-xs text-muted-foreground break-all"> · {placeOf(c)}</span>
     </p>
   );
 }

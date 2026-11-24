@@ -42,7 +42,7 @@ const REFUSALS = [
   {
     code: "501 FEATURE_DISABLED",
     see: "“Live status is off”, “Live status is off in this deployment”, or “Nodes need live status from the MCE”",
-    why: "This deployment does not read HostedClusters from the MCE hubs. It is not an error.",
+    why: "This deployment does not read the clusters' live status. It is not an error.",
     fix: "Nothing to fix. InfraEnv names are typed instead of picked, and the Nodes tab lists no NodePools.",
   },
   {

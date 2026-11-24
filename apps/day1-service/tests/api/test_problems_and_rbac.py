@@ -145,7 +145,7 @@ async def test_a_bad_path_segment_is_a_validation_problem(
     response = await client.get(
         "/api/day1/clusters/x/history",
         params={"site": "..", "mce": "m"},
-        headers=auth(support.VIEWER),
+        headers=auth(support.ALICE),
     )
     assert_problem(response, 422, "VALIDATION_ERROR")
 

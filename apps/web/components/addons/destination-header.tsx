@@ -62,9 +62,12 @@ export function DestinationFacts({ charts, destination }: { charts: DestinationC
             {k} <span className={cn("font-mono text-foreground", k === "env" && !charts.env && "text-status-warning-fg")}>{v}</span>
           </span>
         ))}
-      <span className="min-w-0 break-all font-mono text-[11px] text-muted-foreground/80" title="Destination id">
-        {charts.id}
-      </span>
+      {/* A viewer's destination is its name (ADR-0068): no id to add */}
+      {charts.id !== charts.cluster && (
+        <span className="min-w-0 break-all font-mono text-[11px] text-muted-foreground/80" title="Destination id">
+          {charts.id}
+        </span>
+      )}
     </div>
   );
 }

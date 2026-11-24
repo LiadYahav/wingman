@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel
 
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day2.api.v1.schemas import CatalogEntryOut, FindingOut, SyncOut, findings
 from wingman_day2.application.apps import LoadedLayer
 from wingman_day2.application.authoring import SCOPE_LABELS, SCOPE_NOUNS
@@ -93,7 +94,7 @@ class ScopeDestinationOut(BaseModel):
     kind: str
     site: str
     env: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     ocp_version: str | None
     renders: bool
     state: str
@@ -134,7 +135,7 @@ class UnregisteredOut(BaseModel):
     name: str
     site: str
     env: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
 
 
 class EnvFileOut(BaseModel):

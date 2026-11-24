@@ -28,7 +28,8 @@ export interface PickFilters {
 export const NO_FILTERS: PickFilters = { search: "", site: "", mce: "", owner: { merkaz: "", anaf: "", mador: "" } };
 
 /** A cluster file, wherever it is: names are unique, but a pick pins its site and MCE. */
-export const pickKey = (c: { name: string; site: string; mce: string }) => `${c.site}/${c.mce}/${c.name}`;
+/** An admin's import: every cluster has its MCE (a viewer never opens it). */
+export const pickKey = (c: { name: string; site: string; mce: string | null }) => `${c.site}/${c.mce ?? ""}/${c.name}`;
 
 const ALL = "__all__";
 
@@ -129,7 +130,7 @@ export function PickStep({
   const all = useMemo(() => [...(clusters ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [clusters]);
   const sites = useMemo(() => [...new Set(all.map((c) => c.site))].sort(), [all]);
   const mces = useMemo(
-    () => [...new Set(all.filter((c) => !filters.site || c.site === filters.site).map((c) => c.mce))].sort(),
+    () => [...new Set(all.filter((c) => !filters.site || c.site === filters.site).flatMap((c) => (c.mce ? [c.mce] : [])))].sort(),
     [all, filters.site]
   );
   const filtered = useMemo(() => all.filter((c) => matches(c, filters)), [all, filters]);

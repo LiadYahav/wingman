@@ -25,7 +25,7 @@ from wingman_day1.api.v1.upgrade_schemas import (
     UpgradeRunOut,
     UpgradeTargetsOut,
 )
-from wingman_day1.api.v1.visible import cluster_ref
+from wingman_day1.api.v1.visible import all_shown, cluster_ref, shown
 from wingman_day1.domain.upgrades import UpgradeDecision
 from wingman_day1.domain.visibility import sees_cluster
 
@@ -40,17 +40,21 @@ ActionId = Annotated[
 
 
 @router.get("/upgrades")
-async def fleet_upgrades(user: CurrentUser, upgrades: Upgrades) -> FleetUpgradesOut:
+async def fleet_upgrades(
+    user: CurrentUser, upgrades: Upgrades, context: Context
+) -> FleetUpgradesOut:
     """Every cluster's newest upgrade run, open ones first, from the orchestrator's run list.
 
-    A viewer's list has no KV cluster's run (ADR-0067).
+    A viewer's list has no KV cluster's run (ADR-0067) and names no MCE (ADR-0068).
     """
     rows = [
         row
         for row in await upgrades.fleet()
         if sees_cluster(user, row.row.cluster, mce=row.ref.mce if row.ref else "")
     ]
-    return FleetUpgradesOut(runs=[FleetUpgradeOut.of(row) for row in rows])
+    return FleetUpgradesOut(
+        runs=await all_shown(context, user, [FleetUpgradeOut.of(row) for row in rows])
+    )
 
 
 @router.get("/clusters/{name}/upgrade-targets")
@@ -93,10 +97,13 @@ async def upgrade_run(
 ) -> UpgradeRunOut:
     """The cluster's newest upgrade run, read by its id (404 when it never had one).
 
-    For a viewer, ``pending_actions`` is empty: a proposal may act on one of the cluster's nodes.
+    For a viewer, ``pending_actions`` is empty: a proposal may act on one of the cluster's nodes;
+    ``mce`` is ``null`` and the workflow's words name no MCE (ADR-0068).
     """
     run = await upgrades.run(await cluster_ref(context, user, name, site, mce))
-    return UpgradeRunOut.of(run if user.is_admin else run.without_proposals())
+    return await shown(
+        context, user, UpgradeRunOut.of(run if user.is_admin else run.without_proposals())
+    )
 
 
 @router.post("/clusters/{name}/upgrade-run/actions/{action_id}/{verdict}")

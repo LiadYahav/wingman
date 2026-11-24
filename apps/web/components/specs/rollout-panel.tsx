@@ -14,7 +14,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { HeldReplicasLinks } from "@/components/clusters/scale/restore-replicas";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref } from "@/lib/approvals";
-import { clusterHref } from "@/lib/clusters";
+import { clusterHref, placeOf } from "@/lib/clusters";
 import { ROLLOUT_LABEL, ROLLOUT_ORDER, useRollout } from "@/lib/rollout";
 import { cn, formatDateTime, plural } from "@/lib/utils";
 import { writeErrorTitle } from "@/lib/write-errors";
@@ -117,7 +117,7 @@ function ClusterRow({ cluster: c }: { cluster: RolloutCluster }) {
           {c.name}
         </Link>
         <p className="text-xs text-muted-foreground break-all">
-          {c.site} / {c.mce}
+          {placeOf(c)}
           {c.from_version && <> · on v{c.from_version}</>}
         </p>
         {c.merge_request && (

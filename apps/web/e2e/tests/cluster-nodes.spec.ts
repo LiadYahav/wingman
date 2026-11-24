@@ -13,7 +13,7 @@
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import {
-  BOARD, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
+  anyQuery, BOARD, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
   mockNodesBoard, mockPoolNode, mockServer, mockUninstallNode,
 } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterNodes, DestinationCharts, ServerRecord, WorkflowRun } from "../../types";
@@ -66,15 +66,15 @@ async function openCluster(
   await mockDashboardApis(page);
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
-  await page.route(`**/api/day1/clusters/${LARK}?**`, (r) => json(r, DETAIL));
-  await page.route(`**/api/day1/clusters/${LARK}/drift?**`, (r) =>
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}`), (r) => json(r, DETAIL));
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}/drift`), (r) =>
     json(r, {
       cluster: LARK, site: SITE, mce: MCE, state: "not_linked", is_drifted: false, spec_name: null, spec_version: null,
       current_spec_version: null, value_drift: [], addon_drift: [], version_differences: [], error: null,
     })
   );
-  await page.route(`**/api/day2/clusters/${LARK}/history?**`, (r) => json(r, []));
-  await page.route(`**/api/day2/clusters/${LARK}/addons?**`, (r) => json(r, CHARTS));
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/history`), (r) => json(r, []));
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/addons`), (r) => json(r, CHARTS));
   await page.route("**/api/day2/addons", (r) => json(r, []));
   await mockClusterNodes(page, LARK, nodes);
   await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}${tab ? `&tab=${tab}` : ""}`);

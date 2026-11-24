@@ -48,12 +48,12 @@ async def get(
     ledger: FakeSegmentLedger | None = None,
     query: str = "",
 ) -> httpx.Response:
-    """``GET /clusters/{name}/network`` as a viewer, on an app without the MCE hubs."""
+    """``GET /clusters/{name}/network`` as an admin, on an app without the MCE hubs."""
     app = support.build_app(
         gitlab=gitlab, hub=None, identity=None, day2=FakeDay2Addons(), clock=clock, ledger=ledger
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    headers = auth(support.VIEWER) if auth else {}
+    headers = auth(support.ALICE) if auth else {}
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
         return await client.get(
             f"/api/day1/clusters/{quote(name, safe='')}/network{query}", headers=headers

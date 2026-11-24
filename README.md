@@ -122,7 +122,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
-| **Two workspaces** | An admin's top bar switches between **Customers**, the tenants' side (Dashboard, Clusters, Flavors, Addons, Approvals, Audit, Lints; all a viewer has, with no switch), and **Infrastructure**, what serves them (its Overview, Customer MCEs, Seeds & KV Clusters, Inventory Management, Quick Links, and links to segments-manager's and server-scan's own UIs); Documentation and Settings are in both. A cluster's page belongs to its kind: a KV cluster's is Infrastructure's. A viewer never knows of a seed, a KV cluster or an MCE: day1 and day2 refuse or leave them out (ADR-0067). |
+| **Two workspaces** | An admin's top bar switches between **Customers**, the tenants' side (Dashboard, Clusters, Flavors, Addons, Approvals, Audit, Lints; all a viewer has, with no switch), and **Infrastructure**, what serves them (its Overview, Customer MCEs, Seeds & KV Clusters, Inventory Management, Quick Links, and links to segments-manager's and server-scan's own UIs); Documentation and Settings are in both. A cluster's page belongs to its kind: a KV cluster's is Infrastructure's. A viewer never knows of a seed, a KV cluster or an MCE: day1 and day2 refuse or leave them out (ADR-0067), and no answer a viewer reads names an MCE, a path through one or an infrastructure file; a tenant's cluster shows its site, never its MCE (ADR-0068). |
 | **Overview** | Each workspace's home. Customers' (`/`): the tenants' clusters, ready, pending approvals and drifted counts, Cluster Health and the newest approvals, then **OpenShift Versions** (the tenants' clusters per mastertag, newest first, and with `DAY1_UPGRADES` how many have an upgrade available or running, each opening the clusters list with that filter). Infrastructure's (`/infrastructure`, admins): the Customer MCEs and their sites, the seeds and their zones, the KV clusters and the free servers, then **Where Clusters Run** (the tenants' clusters per site and Customer MCE) and **Free Servers** (each MCE's free Agents by InfraEnv pool, Inventory Management's counts). Each card reads its own source and loads, fails and empties on its own; a source that is off here says so in one muted line. New Cluster, New Flavor (admins) and Browse Flavors sit beside the Customers title. |
 | **Seeds and KV clusters** | A seed (`ocp4-<lc>-seed-<site>-<zone>-<id>`, or the deployed workflows' `ocp4-seed-<site>-<zone>`) is an MCE-level folder that hosts one zone's KV clusters, each a hosted-cluster file in it. Day1 knows each folder's and file's kind and carries it (`kind`, `zone`); **Customer MCEs** (`/mces`) and **Seeds & KV Clusters** (`/seeds`) list them by site, for admins. A KV cluster is managed like any hosted cluster; its Delete asks for its name and says the tenants' VMs go with it; placement never offers a seed (ADR-0067). |
 | **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/` (the generic network template `nm-conf-template.bu`, written as plain `nm-conf`, first and the default when the repo has it), and shows day1's problems at their fields (ADR-0026 to ADR-0029). Each nodepool also picks **tuning profiles** (`Tuned`, `PerformanceProfile`) from `tuning/` in the day1 repo, at most one PerformanceProfile per nodepool, lockable for every nodepool as `nodepools[*].tuning_config`; Wingman writes only the names (`tuningConfig`) and the day1 CI injects the manifests (`tuningConfigmap`); without `tuning/` the picker is empty (ADR-0061). |
@@ -172,9 +172,12 @@ Changes since the legacy services:
 ### Day1 Service (Port 8001)
 
 `site` and `mce` query parameters are optional on a cluster's routes: cluster names are unique.
-A viewer never knows of a seed, a KV cluster or an MCE (ADR-0067): a KV cluster is answered
+They are an admin's: a viewer's cluster is found by its name, whatever they say.
+A viewer never knows of a seed, a KV cluster or an MCE (ADR-0067, ADR-0068): a KV cluster is answered
 as a missing cluster (`404`), every list a viewer reads leaves it out, and the sites, MCEs,
-placement and Inventory Management are admins' reads (`403`). The same holds in day2.
+placement and Inventory Management are admins' reads (`403`). A viewer's answers have every
+`mce`, file path and repo link `null`, every text with the MCEs' and KV clusters' names as
+`[hidden]`, and of a diff the tenant clusters' files alone, by file name. The same holds in day2.
 
 #### Login and build
 
@@ -195,8 +198,8 @@ placement and Inventory Management are admins' reads (`403`). The same holds in 
 | `GET` | `/api/day1/clusters/{name}/provision-run` | The new cluster's provision-cluster run: the workflow's status, phase, merge request and error (404 none) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would hand the workflow, after every check a create runs (with placement on, the MCE against the placement rule: an override of Wingman's pick needs `placement.reason`) |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
-| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
-| `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
+| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040; admins) |
+| `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters (each `{name}`, an admin's with its `mce`; ADR-0068) |
 | `GET` | `/api/day1/clusters/{name}` | The cluster's file, values, `kind` and naming (`naming.zone`: a KV cluster's zone); a KV cluster is a `404` for a viewer |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
 | `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file). A KV cluster's needs its name, `?confirm=<name>` (`422` otherwise), and its MR says the tenants' VM workers it hosts go with it (ADR-0067) |
@@ -221,7 +224,7 @@ placement and Inventory Management are admins' reads (`403`). The same holds in 
 | `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its flavor: the locked values its file does not hold, and its missing Day2 add-ons |
 | `POST` | `/api/day1/clusters/{name}/sync/preview` | What syncing the cluster to its flavor would write: each locked value it does not hold, the configs removed, the nodepools whose nodes roll, and what blocks it (`hardware` choices when a nodepool's network config can't be read) |
 | `POST` | `/api/day1/clusters/{name}/sync` | Open one day1 MR that sets those values; refused unless `confirm_removals` names exactly the preview's removals. With `DAY1_SCALE_NODEPOOLS`, drifted locked replicas are not in it: the preview and the answer list them in `held_replicas`, each restored through update-nodepool (ADR-0062) |
-| `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (`?mce=`; 501 when live status is off) |
+| `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (an admin's `?mce=`, else the cluster's folder; 501 when live status is off) |
 | `GET` | `/api/day1/clusters/{name}/status/stream` | The same as server-sent events, every `DAY1_STATUS_POLL_SECONDS` |
 
 #### Sites and MCEs (read-only, ADR-0018; admins only, ADR-0067)
@@ -302,6 +305,17 @@ Each MCE's available Agents by InfraEnv pool, as server-scan counts them, the ad
 `{cluster}` is a cluster id (`hub`, `mce:<site>:<env>:<mce>`,
 `hosted:<site>:<env>:<mce>:<cluster>`, `upi:<site>:<env>:<cluster>`) or a bare
 name that names one destination (`?mce=` when it names more than one).
+A viewer knows of the tenants' hosted clusters alone (ADR-0067, ADR-0068): the
+hub, the UPI clusters, every MCE hub (seeds included) and every KV cluster are
+left out of their lists, and naming one, or any id or `hub`, is the unknown
+cluster's `404`. A viewer names a cluster by its bare name (`?mce=` and a
+body's `mce` are ignored); in their answers its `id` is that name, `mce`,
+`argo` and `gitlab_url` are `null`, a path in its own folder starts at the
+cluster (`<cluster>/<chart>/values.yaml`), and every text has the MCEs', the
+hub's, the UPI and KV clusters' names as `[hidden]`. Their approvals, audit,
+lints, fleet defaults and add-on pages are the tenants' and the hosted
+clusters' scope's alone, and of a diff they read a tenant's own files and the
+team's `operators/` and `defaults/hosted-clusters/` files.
 
 #### Catalog and lints
 
@@ -334,7 +348,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach |
+| `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach (admins only, ADR-0068) |
 | `POST` | `/api/day2/addons/{team}` | Add an add-on to the team's catalog, optionally as a fleet default (opens an MR) |
 | `PUT` | `/api/day2/addons/{team}/{addon}` | Edit the add-on (the API's team default): deploy config (edited in place), sync options, Sig values (opens an MR) |
 | `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
@@ -352,7 +366,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`); a viewer's has no MCE (seeds included) and no KV cluster, and naming one is a `404` (ADR-0067) |
+| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`); a viewer's are the tenants' hosted clusters, by name (ADR-0067, ADR-0068) |
 | `GET` | `/api/day2/clusters/{cluster}` | One destination |
 | `GET` | `/api/day2/clusters/{cluster}/addons` | The charts on it: its own folders and fleet defaults |
 | `GET` | `/api/day2/clusters/{cluster}/addons/{team}/{addon}` | The chart's merged values, layer by layer, with provenance |

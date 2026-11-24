@@ -1,13 +1,23 @@
 import { Boxes } from "lucide-react";
+import { useMounted } from "@/hooks/use-mounted";
+import { useIsAdmin } from "@/stores/auth-store";
 import { SectionHeader } from "./docs-parts";
 
-/** The docs page's "Core Concepts" section, `#concepts`. */
+type Term = { term: string; color: string; description: string; example: string; admin?: true };
+
+/** A cluster as a viewer reads of it: its site, never the hub it runs on (ADR-0068). */
+const VIEWER_CLUSTER: Term = {
+  term: "Cluster",
+  color: "bg-blue-500/10 text-blue-500",
+  description: "A hosted cluster: one values file in the day1 repo. Its name says its environment and its site, so a cluster cannot be renamed or moved: that would be a delete and a create.",
+  example: "ocp4-prod-herzi-site1 — a prod cluster on site1",
+};
+
+/** The docs page's "Core Concepts" section, `#concepts`. A viewer's has no MCE or destination kinds. */
 export function ConceptsSection() {
-  return (
-    <section>
-      <SectionHeader id="concepts" icon={Boxes} title="Core Concepts" subtitle="The mental model behind Wingman" />
-      <div className="space-y-4">
-        {[
+  const mounted = useMounted();
+  const isAdmin = useIsAdmin() && mounted;
+  const terms: Term[] = [
           {
             term: "Flavor",
             color: "bg-purple-500/10 text-purple-500",
@@ -24,16 +34,18 @@ export function ConceptsSection() {
             term: "Site",
             color: "bg-amber-500/10 text-amber-500",
             description: "A location: a folder under sites/ in the day1 repo. Wingman lists sites and never creates them.",
-            example: "site1 — its MCEs are at sites/site1/mces/",
+            example: isAdmin ? "site1 — its MCEs are at sites/site1/mces/" : "site1",
           },
           {
             term: "MCE",
+            admin: true,
             color: "bg-emerald-500/10 text-emerald-500",
             description: "A multicluster engine hub that runs hosted clusters' control planes: a folder at sites/{site}/mces/{mce}/. Its values.yaml holds the default mastertag for new clusters. MCE names follow ocp4-{env}-mce-{site}-{letter}. Read-only in Wingman: MCE onboarding happens elsewhere.",
             example: "ocp4-prod-mce-site1-a — a prod MCE on site1",
           },
           {
             term: "Destination",
+            admin: true,
             color: "bg-cyan-500/10 text-cyan-500",
             description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is. A hosted cluster's charts are on its page (Addons); an add-on's page lists each destination its defaults reach, each name a link to its charts.",
             example: "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1 — a hosted cluster's id",
@@ -44,7 +56,15 @@ export function ConceptsSection() {
             description: "Every edit and delete in Wingman opens a GitLab MR from a platform/{you}/… branch (a create starts the provision-cluster workflow, which opens its own). Nothing changes until another admin approves it, which merges it. The MR and its commit name the person who asked for the change.",
             example: "Editing ocp4-prod-herzi-site1 opens “[Wingman/Day1] Modify cluster ocp4-prod-herzi-site1”",
           },
-        ].map(({ term, color, description, example }) => (
+        ];
+  const shown = terms
+    .filter((t) => isAdmin || !t.admin)
+    .map((t) => (!isAdmin && t.term === "Cluster" ? VIEWER_CLUSTER : t));
+  return (
+    <section>
+      <SectionHeader id="concepts" icon={Boxes} title="Core Concepts" subtitle="The mental model behind Wingman" />
+      <div className="space-y-4">
+        {shown.map(({ term, color, description, example }) => (
           <div key={term} className="rounded-xl border bg-card p-5">
             <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
               <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold font-mono mt-0.5 ${color}`}>{term}</span>

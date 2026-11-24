@@ -173,7 +173,7 @@ async def test_turned_off_beside_the_orchestrator_every_scale_route_is_501(
 async def test_the_options_are_the_files_nodepools(
     on: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    response = await on.get(f"{BASE}/scale", headers=auth(support.VIEWER))
+    response = await on.get(f"{BASE}/scale", headers=auth(support.ALICE))
     assert response.status_code == 200, response.text
     body = response.json()
     assert (body["cluster"], body["mce"], body["flavor"]) == (LARK, MCE, None)

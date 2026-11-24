@@ -457,7 +457,7 @@ test.describe("A flavor sync leaves locked replicas to update-nodepool", () => {
     }],
   };
   const held: SyncPreview = {
-    cluster: LARK, site: SITE, mce: MCE, path: DETAIL.path, last_commit_id: DETAIL.last_commit_id, spec_name: FLAVOR,
+    cluster: LARK, site: SITE, mce: MCE, path: DETAIL.path ?? "", last_commit_id: DETAIL.last_commit_id, spec_name: FLAVOR,
     spec_version: "1.0.0", file_spec_version: "1.0.0", changes: [], diff: "", removals: [], rebooting: [], problems: [],
     warnings: [], can_sync: false, addons_to_install: [], version_differences: [], addons_error: null,
     held_replicas: [{ index: 2, name: R760, replicas: 3, flavor_replicas: 2 }],

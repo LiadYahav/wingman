@@ -120,7 +120,7 @@ async def test_each_clusters_run_with_its_phase_and_where_day1_has_it(
     run_clock.advance(60)
     await upgrade.start(lark())
     run_clock.advance(10)  # past planning and the pre-flight
-    response = await on.get(FLEET, headers=auth(support.VIEWER))
+    response = await on.get(FLEET, headers=auth(support.ALICE))
     assert response.status_code == 200
     first, second = response.json()["runs"]
     assert first == {

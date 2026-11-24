@@ -24,7 +24,7 @@ import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
-import { clusterHref, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
+import { clusterHref, clusterQuery, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { flavorDisplayState } from "@/lib/flavor-state";
 import {
   ANY_OWNER, compareBy, compareOwner, countBy, DRIFT_FILTERS, filterOf, matchesSearch, NO_OWNER, OWNER_LABEL, ownerOf,
@@ -93,7 +93,8 @@ export default function ClustersPage() {
   const prefetchCluster = useCallback((c: ClusterStatus) => {
     if (prefetchTimeoutRef.current) clearTimeout(prefetchTimeoutRef.current);
     prefetchTimeoutRef.current = setTimeout(() => {
-      const where = `?site=${encodeURIComponent(c.site)}&mce=${encodeURIComponent(c.mce)}`;
+      // A viewer's cluster has no MCE: it is read by its name (ADR-0068)
+      const where = clusterQuery(c.site, c.mce);
       const doPrefetch = () => {
         queryClient.prefetchQuery({
           queryKey: day1Keys.clusters.detail(c.name),
@@ -107,8 +108,8 @@ export default function ClustersPage() {
         });
         // The entries the cluster's charts page reads (a bare name, narrowed by its MCE)
         queryClient.prefetchQuery({
-          queryKey: day2Keys.charts(c.name, c.mce),
-          queryFn: () => api.get<DestinationCharts>(day2Api.charts(c.name, c.mce)),
+          queryKey: day2Keys.charts(c.name, c.mce ?? undefined),
+          queryFn: () => api.get<DestinationCharts>(day2Api.charts(c.name, c.mce ?? undefined)),
           staleTime: 60_000,
         });
         queryClient.prefetchQuery({
@@ -417,7 +418,7 @@ export default function ClustersPage() {
                             <td className="px-3 py-3 whitespace-nowrap">
                               <div className="leading-snug">
                                 <p className="text-sm text-foreground">{cluster.site}</p>
-                                <p className="text-xs text-muted-foreground">{cluster.mce}</p>
+                                {cluster.mce && <p className="text-xs text-muted-foreground">{cluster.mce}</p>}
                               </div>
                             </td>
                             <td className="px-3 py-3">

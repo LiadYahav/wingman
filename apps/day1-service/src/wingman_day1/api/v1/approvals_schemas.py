@@ -6,9 +6,12 @@ cluster by cluster (ADR-0044).
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, Field
 
 from wingman_core.web.schemas import FileDiffOut
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.api.v1.schemas import MAX_FILE_BYTES, MRDetailOut, _In
 from wingman_day1.application.rollouts import RolloutPreview
 
@@ -50,7 +53,7 @@ class ClusterRefOut(BaseModel):
 
     name: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
 
 
 class DecisionOut(ClusterRefOut):

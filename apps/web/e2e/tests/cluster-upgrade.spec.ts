@@ -6,7 +6,7 @@
  * validators judge. Upgrades off: nothing is shown. Every API is mocked.
  */
 import { test, expect, type Page, type Request, type Route } from "@playwright/test";
-import { fulfillProblem, go, held, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { anyQuery, fulfillProblem, go, held, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import type { ClusterDetail, UpgradeRun, UpgradeTargets } from "../../types";
 
 const SITE = "site1";
@@ -95,15 +95,15 @@ async function openCluster(
   if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
-  await page.route(`**/api/day1/clusters/${LARK}?**`, (r) => json(r, DETAIL));
-  await page.route(`**/api/day1/clusters/${LARK}/drift?**`, (r) =>
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}`), (r) => json(r, DETAIL));
+  await page.route(anyQuery(`/api/day1/clusters/${LARK}/drift`), (r) =>
     json(r, {
       cluster: LARK, site: SITE, mce: MCE, state: "not_linked", is_drifted: false, spec_name: null, spec_version: null,
       current_spec_version: null, value_drift: [], addon_drift: [], version_differences: [], error: null,
     })
   );
-  await page.route(`**/api/day2/clusters/${LARK}/history?**`, (r) => json(r, []));
-  await page.route(`**/api/day2/clusters/${LARK}/addons?**`, (r) =>
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/history`), (r) => json(r, []));
+  await page.route(anyQuery(`/api/day2/clusters/${LARK}/addons`), (r) =>
     json(r, { cluster: LARK, mce: MCE, id: `hosted:${SITE}:prod:${MCE}:${LARK}`, kind: "hosted", site: SITE, env: "prod",
       ocp_version: "4.18.22", installed: [], excluded: [], warnings: [], argocd_note: "" })
   );

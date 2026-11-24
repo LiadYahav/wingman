@@ -4,16 +4,17 @@
 ``upi:...``, ``hub``) or a bare name that names exactly one destination. The
 legacy ``mce`` query parameter is accepted and narrows a bare name.
 
-A viewer never knows of an MCE, a seed or a KV cluster (ADR-0067): the list
-leaves them out, and a read that names one answers what an unknown cluster
-answers (``Topology.visible_to``), before the read itself.
+A viewer knows of the tenants' clusters alone (ADR-0067, ADR-0068): the list
+leaves every other destination out, a read names its cluster by its bare name
+(an id, ``hub`` or another destination answers what an unknown cluster
+answers, ``mce`` is ignored), and the answer names no MCE (``api/v1/visible.py``).
+Every read then asks its service by the destination's id.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
 
-from wingman_core.domain.users import User
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day2.api.v1.clusters_schemas import (
     BulkBody,
@@ -31,19 +32,14 @@ from wingman_day2.api.v1.clusters_schemas import (
 )
 from wingman_day2.api.v1.dependencies import Services
 from wingman_day2.api.v1.schemas import findings
+from wingman_day2.api.v1.visible import view_of
 from wingman_day2.application.changes import InstallSpec
-from wingman_day2.application.services import Day2Services
-from wingman_day2.application.topology import ClusterSummary
 from wingman_day2.domain.clusters import ClusterKind
+from wingman_day2.domain.errors import ChangeRefusedError
 
 router = APIRouter(prefix="/api/day2", tags=["clusters"])
 
-Mce = Query(default=None, description="Legacy: narrows a bare cluster name to one MCE")
-
-
-async def _visible(day2: Day2Services, user: User, cluster: str, mce: str | None) -> ClusterSummary:
-    """The destination ``cluster`` names, as ``user`` may know of it; unknown otherwise."""
-    return (await day2.topology.load()).visible_to(user).resolve(cluster, mce=mce)
+Mce = Query(default=None, description="Legacy: narrows a bare cluster name to one MCE (admins)")
 
 
 @router.get("/clusters")
@@ -54,15 +50,17 @@ async def list_clusters(
     site: str | None = Query(default=None),
     env: str | None = Query(default=None),
 ) -> list[ClusterOut]:
-    """Every destination from day1 and the team repos; a viewer's has no MCE or KV cluster."""
-    topology = (await day2.topology.load()).visible_to(user)
-    return [
-        ClusterOut.of(s)
-        for s in topology.clusters
-        if (kind is None or s.ref.kind is kind)
-        and (site is None or s.ref.site == site)
-        and (env is None or s.ref.env == env)
-    ]
+    """Every destination from day1 and the team repos; a viewer's, the tenants' clusters."""
+    seen = await view_of(day2, user)
+    return seen.all_shown(
+        [
+            ClusterOut.of(s)
+            for s in seen.topology.visible_to(user).clusters
+            if (kind is None or s.ref.kind is kind)
+            and (site is None or s.ref.site == site)
+            and (env is None or s.ref.env == env)
+        ]
+    )
 
 
 @router.get("/clusters/{cluster}")
@@ -70,7 +68,8 @@ async def get_cluster(
     cluster: str, user: CurrentUser, day2: Services, mce: str | None = Mce
 ) -> ClusterOut:
     """One destination."""
-    return ClusterOut.of(await _visible(day2, user, cluster, mce))
+    seen = await view_of(day2, user)
+    return seen.shown(ClusterOut.of(seen.destination(cluster, mce)))
 
 
 @router.get("/clusters/{cluster}/addons")
@@ -82,8 +81,10 @@ async def list_cluster_addons(
     team: str | None = Query(default=None),
 ) -> ClusterInstalledOut:
     """The charts the platform generates apps for on the cluster, with where each comes from."""
-    await _visible(day2, user, cluster, mce)
-    return ClusterInstalledOut.of(await day2.installed.for_cluster(cluster, mce=mce, team=team))
+    seen = await view_of(day2, user)
+    ref = seen.destination(cluster, mce).ref
+    charts = await seen.guarded(day2.installed.for_cluster(ref.id, team=team))
+    return seen.shown(ClusterInstalledOut.of(charts))
 
 
 @router.get("/clusters/{cluster}/addons/{team}/{addon}")
@@ -97,27 +98,40 @@ async def get_cluster_addon(
     version: str | None = Query(default=None, description="Preview another chart revision"),
 ) -> ValuesPreviewOut:
     """The chart's merged values on the cluster, layer by layer, with provenance."""
-    await _visible(day2, user, cluster, mce)
-    preview = await day2.preview.preview(cluster, team, addon, mce=mce, version=version)
-    return ValuesPreviewOut.of(preview)
+    seen = await view_of(day2, user)
+    ref = seen.destination(cluster, mce).ref
+    preview = await seen.guarded(day2.preview.preview(ref.id, team, addon, version=version))
+    return seen.shown(ValuesPreviewOut.of(preview))
 
 
 @router.post("/merge-preview")
 async def merge_preview(
     body: MergePreviewBody, user: CurrentUser, day2: Services
 ) -> ValuesPreviewOut:
-    """The merged values with edited cluster values, before writing them."""
-    await _visible(day2, user, body.cluster, body.mce)
-    preview = await day2.preview.preview(
-        body.cluster,
+    """The merged values with edited cluster values, before writing them.
+
+    A viewer names the cluster by its name, and a layer by its path as they read it.
+    """
+    seen = await view_of(day2, user)
+    ref = seen.destination(body.cluster, body.mce).ref
+    asked = day2.preview.preview(
+        ref.id,
         body.team,
         body.addon,
-        mce=body.mce,
         version=body.version,
         override_values=body.override_values,
-        override_path=body.override_path,
+        override_path=seen.repo_path(ref, body.override_path),
     )
-    return ValuesPreviewOut.of(preview)
+    try:
+        preview = await seen.guarded(asked)
+    except ChangeRefusedError as exc:
+        if seen.admin or exc.details.get("rule") != "override-path":
+            raise
+        raise ChangeRefusedError(
+            f"{body.override_path} is not a values layer of {body.addon} on {ref.name}",
+            details={"rule": "override-path", "path": body.override_path},
+        ) from None
+    return seen.shown(ValuesPreviewOut.of(preview))
 
 
 @router.post("/clusters/{cluster}/addons/bulk", status_code=status.HTTP_201_CREATED)
@@ -222,11 +236,10 @@ async def history(
     cluster: str, user: CurrentUser, day2: Services, mce: str | None = Mce
 ) -> list[HistoryEntryOut]:
     """Commits that touched the cluster's folder, across team repos."""
-    await _visible(day2, user, cluster, mce)
-    return [
-        HistoryEntryOut.of(c.team, c.commit)
-        for c in await day2.audit.cluster_history(cluster, mce=mce)
-    ]
+    seen = await view_of(day2, user)
+    ref = seen.destination(cluster, mce).ref
+    commits = await seen.guarded(day2.audit.cluster_history(ref.id))
+    return seen.all_shown([HistoryEntryOut.of(c.team, c.commit) for c in commits])
 
 
 @router.get("/clusters/{cluster}/upgrade-check")
@@ -238,11 +251,14 @@ async def upgrade_check(
     mce: str | None = Mce,
 ) -> UpgradeCheckOut:
     """Version-pinned charts that would silently fall back to their team default at ``to``."""
-    await _visible(day2, user, cluster, mce)
-    summary, found = await day2.lints.upgrade_check(cluster, to, mce=mce)
-    return UpgradeCheckOut(
-        cluster=summary.ref.id,
-        from_version=summary.ocp_version,
-        to_version=to.split("-", 1)[0],
-        warnings=findings(found),
+    seen = await view_of(day2, user)
+    ref = seen.destination(cluster, mce).ref
+    summary, found = await seen.guarded(day2.lints.upgrade_check(ref.id, to))
+    return seen.shown(
+        UpgradeCheckOut(
+            cluster=summary.ref.id,
+            from_version=summary.ocp_version,
+            to_version=to.split("-", 1)[0],
+            warnings=findings(found),
+        )
     )

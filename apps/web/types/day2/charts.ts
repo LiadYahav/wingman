@@ -5,7 +5,8 @@ import type { DestinationKind, Finding } from "./destinations";
 /** The leaf ArgoCD Application the platform generates for a chart on a destination. */
 export interface LeafApp {
   app_name: string;
-  argo: string;
+  /** The ArgoCD instance (the MCE's for a hosted cluster); `null` for a viewer (ADR-0068). */
+  argo: string | null;
   namespace: string;
   repo_url: string;
   target_revision: string;
@@ -28,7 +29,8 @@ export interface InstalledChart {
   /** The contents of `override_path`: what an update rewrites. */
   override_values: Record<string, unknown>;
   parse_errors: Finding[];
-  gitlab_url: string;
+  /** `null` for a viewer: the folder's link names its MCE (ADR-0068). */
+  gitlab_url: string | null;
   source: ChartSource | (string & {});
   /** The chart's folder (its own, or the fleet default's). */
   path: string;
@@ -52,7 +54,8 @@ export interface ExcludedDefault {
 /** `GET /api/day2/clusters/{id}/addons`. */
 export interface DestinationCharts {
   cluster: string;
-  mce: string;
+  /** `null` for a viewer (ADR-0068). */
+  mce: string | null;
   id: string;
   kind: DestinationKind;
   site: string;

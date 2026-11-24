@@ -26,14 +26,14 @@ UI = "https://segments-manager.example"
 async def detail(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth, name: str, **settings: object
 ) -> dict[str, Any]:
-    """``GET /api/day1/clusters/{name}`` as a viewer, on an app with ``settings``."""
+    """``GET /api/day1/clusters/{name}`` as an admin, on an app with ``settings``."""
     app = support.build_app(
         gitlab=gitlab, hub=None, identity=None, day2=FakeDay2Addons(), clock=clock, **settings
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
         response = await client.get(
-            f"/api/day1/clusters/{quote(name, safe='')}", headers=auth(support.VIEWER)
+            f"/api/day1/clusters/{quote(name, safe='')}", headers=auth(support.ALICE)
         )
     assert response.status_code == 200, response.text
     return response.json()

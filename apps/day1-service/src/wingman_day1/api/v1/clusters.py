@@ -4,24 +4,21 @@ Reads need a session (``CurrentUser``), but a cluster's nodes, the servers
 it runs on, need an admin (ADR-0038, amended 2026-11-23); every change needs
 an admin (``AdminUser``). A create starts the provision-cluster workflow
 (ADR-0042); an edit or a delete is a merge request. Static paths come before
-``/{name}`` so a cluster can never shadow them.
+``/{name}`` so a cluster can never shadow them. Live status has its own module,
+``cluster_status.py``.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse
 
-from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
+from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes
 from wingman_day1.api.v1.cluster_network_schemas import ClusterNetworkOut
 from wingman_day1.api.v1.cluster_nodes_schemas import ClusterNodesOut, UninstallNodeIn
-from wingman_day1.api.v1.cluster_status_schemas import BulkStatusIn, ClusterLiveStatusOut
 from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncOut, SyncPreviewIn, SyncPreviewOut
 from wingman_day1.api.v1.cluster_workflows_schemas import (
     DeleteWorkflowOut,
@@ -46,15 +43,14 @@ from wingman_day1.api.v1.schemas import (
     WorkflowRunOut,
     change_out,
 )
-from wingman_day1.api.v1.visible import cluster_ref
+from wingman_day1.api.v1.visible import all_shown, cluster_ref, redactor, shown
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.upgrades import upgrade_hints
-from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Choice
-from wingman_day1.domain.visibility import require_seen, seen, sees_cluster
+from wingman_day1.domain.visibility import require_seen, seen
 from wingman_day1.integrations.segments_manager.domain.links import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
@@ -113,40 +109,30 @@ async def list_clusters(context: Context, user: CurrentUser) -> list[ClusterStat
     """
     clusters = seen(user, await context.clusters.clusters(), lambda c: c.ref)
     hints = await upgrade_hints(context.sites, clusters) if context.upgrades is not None else {}
-    return [ClusterStatusOut.of(c, upgrade_available=hints.get(c.ref)) for c in clusters]
+    listed = [ClusterStatusOut.of(c, upgrade_available=hints.get(c.ref)) for c in clusters]
+    return await all_shown(context, user, listed)
 
 
 @router.get("/drift-summary")
 async def drift_summary(context: Context, user: CurrentUser) -> list[DriftSummaryItemOut]:
     """Drift of every cluster a user may know of; unknown drift says so (``state``, ``error``)."""
-    return [DriftSummaryItemOut.of(d) for d in seen(user, await context.drift.summary(), _ref_of)]
+    drifts = seen(user, await context.drift.summary(), _ref_of)
+    return await all_shown(context, user, [DriftSummaryItemOut.of(d) for d in drifts])
 
 
 @router.get("/name-suggestion")
 async def name_suggestion(
-    context: Context, user: CurrentUser, site: RequiredSite, mce: RequiredMce, flavor: Flavor
+    context: Context, user: AdminUser, site: RequiredSite, mce: RequiredMce, flavor: Flavor
 ) -> NameSuggestionOut:
     """A free name for a new cluster from ``flavor``: ``ocp4-<env>-<flavor>-<site>-<letter>``.
 
     The env is the MCE's, the letter the first no cluster or open create MR
     has (ADR-0040). ``name`` is ``null``, with ``problems``, when there is none.
+    An admin's: it reads the MCE a viewer never names (ADR-0068).
     """
     return NameSuggestionOut.of(
         await context.clusters.suggest_name(site=site, mce=mce, flavor=flavor)
     )
-
-
-@router.post("/bulk-status")
-async def bulk_status(
-    body: BulkStatusIn, user: CurrentUser, status: Status
-) -> dict[str, ClusterLiveStatusOut]:
-    """Live status of many clusters; each failure is in its entry's ``error``.
-
-    A KV cluster a viewer names is left out of the answer, as an unknown one would be.
-    """
-    asked = [(c.name, c.mce) for c in body.clusters if sees_cluster(user, c.name, mce=c.mce)]
-    results = await status.statuses(asked)
-    return {name: ClusterLiveStatusOut.of(s) for name, s in results.items()}
 
 
 @router.post("/preview")
@@ -170,43 +156,14 @@ async def create_cluster(
 # ── One cluster ──────────────────────────────────────────────────────────────
 
 
-@router.get("/{name}/status")
-async def cluster_status(
-    name: str, mce: RequiredMce, user: CurrentUser, status: Status
-) -> ClusterLiveStatusOut:
-    """The HostedCluster and NodePools on the MCE hub (501 when status is off)."""
-    require_seen(user, name, mce=mce)
-    return ClusterLiveStatusOut.of(await status.status(name, mce))
-
-
-@router.get("/{name}/status/stream")
-async def stream_cluster_status(
-    name: str, mce: RequiredMce, user: CurrentUser, status: Status, context: Context
-) -> StreamingResponse:
-    """Server-sent events: the live status now, then every ``status_poll_seconds``."""
-    require_seen(user, name, mce=mce)
-
-    async def events() -> AsyncIterator[str]:
-        try:
-            async for live in status.watch(name, mce, interval=context.status_poll_seconds):
-                yield f"data: {ClusterLiveStatusOut.of(live).model_dump_json()}\n\n"
-        except (Day1Error, GitError) as exc:
-            yield f"data: {json.dumps({'error': f'{type(exc).__name__}: {exc}'})}\n\n"
-
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
 @router.get("/{name}/history")
 async def cluster_history(
     name: str, context: Context, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> list[CommitOut]:
     """Commits that changed the cluster's file."""
     ref = await cluster_ref(context, user, name, site, mce)
-    return [CommitOut.of(c) for c in await context.clusters.history(ref)]
+    commits = [CommitOut.of(c) for c in await context.clusters.history(ref)]
+    return await all_shown(context, user, commits)
 
 
 @router.get("/{name}/current-yaml", response_class=PlainTextResponse)
@@ -215,7 +172,7 @@ async def cluster_current_yaml(
 ) -> str:
     """The file's text at the default branch."""
     ref = await cluster_ref(context, user, name, site, mce)
-    return (await context.clusters.get(ref)).content
+    return (await redactor(context, user)).text((await context.clusters.get(ref)).content)
 
 
 @router.get("/{name}/drift")
@@ -224,7 +181,7 @@ async def cluster_drift(
 ) -> ClusterDriftOut:
     """The cluster against its flavor: locked values the file does not hold, missing add-ons."""
     ref = await cluster_ref(context, user, name, site, mce)
-    return ClusterDriftOut.of(await context.drift.for_cluster(ref))
+    return await shown(context, user, ClusterDriftOut.of(await context.drift.for_cluster(ref)))
 
 
 @router.post("/{name}/sync/preview")
@@ -270,16 +227,20 @@ async def sync_cluster(
 async def cluster(
     name: str, context: Context, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ClusterDetailOut:
-    """The cluster's file, values and naming. ``site``/``mce`` are optional: names are unique."""
+    """The cluster's file, values and naming. ``site``/``mce`` are optional: names are unique.
+
+    A viewer's names no MCE, path or link into the tree (ADR-0068).
+    """
     ref = await cluster_ref(context, user, name, site, mce)
     found = await context.clusters.get(ref)
     ui = context.segments_manager_ui_url
-    return cluster_detail(
+    detail = cluster_detail(
         found,
         gitlab_url=await context.clusters.web_url(ref),
         mce_default_mastertag=await context.sites.default_mastertag(ref.site, ref.mce),
         segments_manager=segments_manager_links(ui, ref.name) if ui else None,
     )
+    return await shown(context, user, detail)
 
 
 @router.patch("/{name}")
@@ -314,7 +275,9 @@ async def provision_run(
     404 when the orchestrator has no run, or when a viewer names a KV cluster.
     """
     require_seen(user, name, mce="")
-    return ProvisionRunOut.of(await context.clusters.provision_run(name))
+    return await shown(
+        context, user, ProvisionRunOut.of(await context.clusters.provision_run(name))
+    )
 
 
 @router.get("/{name}/delete-workflow")
@@ -329,7 +292,9 @@ async def delete_workflow_state(
     """The newest delete-cluster run (501 until the workflow exists, ADR-0033)."""
     ref = await cluster_ref(context, user, name, site, mce)
     run = await workflow.latest_run(ref)
-    return DeleteWorkflowOut(run=WorkflowRunOut.of(run) if run else None)
+    return await shown(
+        context, user, DeleteWorkflowOut(run=WorkflowRunOut.of(run) if run else None)
+    )
 
 
 @router.post("/{name}/delete-workflow", status_code=202)
@@ -355,10 +320,12 @@ async def cluster_network(
 
     What segments-manager says that disagrees with the file is in ``problems``
     (ADR-0039). segments-manager off: ``ledger`` is ``null``; failing: also
-    ``ledger_error``. Neither fails the read, and the MCE is never asked.
+    ``ledger_error``. Neither fails the read, and the MCE is never asked. A
+    viewer's is the file's VLAN and segment: segments-manager is not asked (ADR-0068).
     """
     ref = await cluster_ref(context, user, name, site, mce)
-    return ClusterNetworkOut.of(await context.network.network(ref))
+    view = await context.network.network(ref, ledger=user.is_admin)
+    return await shown(context, user, ClusterNetworkOut.of(view))
 
 
 @router.get("/{name}/nodes")

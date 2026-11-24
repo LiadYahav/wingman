@@ -100,7 +100,7 @@ function LayerRow({ row, index }: { row: Row; index: number }) {
 export function DeploySummary({ deploy }: { deploy: LeafApp }) {
   const items: [string, string][] = [
     ["Application", deploy.app_name],
-    ["Argo CD", `${deploy.argo} · ${deploy.namespace}`],
+    ["Argo CD", deploy.argo ? `${deploy.argo} · ${deploy.namespace}` : deploy.namespace],
     ["Chart", `${deploy.repo_url || "(no repourl)"}`],
     ["Revision", deploy.target_revision],
     ["Path", deploy.path],

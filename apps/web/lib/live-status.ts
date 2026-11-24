@@ -13,8 +13,11 @@ import type { ClusterLiveStatus, ClusterPhase } from "@/types";
 /** `null` when live status is off in this deployment. */
 export type LiveStatuses = Record<string, ClusterLiveStatus> | null;
 
+/** A cluster to read: an admin's names its MCE; a viewer's is found by its name (ADR-0068). */
+export type BulkStatusItem = { name: string; mce?: string };
+
 /** `bulk-status`: every requested cluster answers, with `error` set when its read failed. */
-export async function fetchBulkStatus(clusters: { name: string; mce: string }[]): Promise<LiveStatuses> {
+export async function fetchBulkStatus(clusters: BulkStatusItem[]): Promise<LiveStatuses> {
   try {
     return await day1Api.clusters.bulkStatus(clusters);
   } catch (error) {
@@ -24,7 +27,7 @@ export async function fetchBulkStatus(clusters: { name: string; mce: string }[])
 }
 
 /** One cluster's status; `null` when live status is off. */
-async function fetchLiveStatus(name: string, mce: string): Promise<ClusterLiveStatus | null> {
+async function fetchLiveStatus(name: string, mce: string | null): Promise<ClusterLiveStatus | null> {
   try {
     return await day1Api.clusters.status(name, mce);
   } catch (error) {
@@ -35,13 +38,15 @@ async function fetchLiveStatus(name: string, mce: string): Promise<ClusterLiveSt
 
 /**
  * One cluster's live status, read once (`null` when status is off), then
- * kept current by day1's server-sent stream while status is on.
+ * kept current by day1's server-sent stream while status is on. Read once
+ * the MCE is known (an admin's, from the link or the detail) or the cluster
+ * is (`found`): a viewer's has no MCE and is read by its name (ADR-0068).
  */
-export function useClusterLiveStatus(name: string, mce: string) {
+export function useClusterLiveStatus(name: string, mce: string | null, found = false) {
   const query = useQuery<ClusterLiveStatus | null>({
-    queryKey: day1Keys.clusters.liveStatus(name, mce),
+    queryKey: day1Keys.clusters.liveStatus(name, mce ?? ""),
     queryFn: () => fetchLiveStatus(name, mce),
-    enabled: Boolean(mce),
+    enabled: Boolean(mce) || found,
     staleTime: 30_000,
     retry: false,
   });
@@ -58,12 +63,12 @@ const MAX_STREAM_RETRIES = 5;
  * replaces the cached status; an error frame ends the stream, and the last
  * status stays with its error.
  */
-function useStatusStream(name: string, mce: string, statusOn: boolean) {
+function useStatusStream(name: string, mce: string | null, statusOn: boolean) {
   const queryClient = useQueryClient();
   useEffect(() => {
-    if (!mce || !statusOn) return;
+    if (!statusOn) return;
     const controller = new AbortController();
-    const key = day1Keys.clusters.liveStatus(name, mce);
+    const key = day1Keys.clusters.liveStatus(name, mce ?? "");
     const show = (frame: Partial<ClusterLiveStatus>) => {
       if (frame.cluster_name) queryClient.setQueryData(key, frame as ClusterLiveStatus);
       else if (frame.error) {

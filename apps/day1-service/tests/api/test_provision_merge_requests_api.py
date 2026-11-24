@@ -45,7 +45,7 @@ async def test_the_workflows_mr_is_listed_and_marked_as_the_workflows(
         gitlab, "ocp4-prod-puma-site1", branch="provision-cluster-ocp4-prod-puma-site1"
     )
 
-    listed = (await client.get("/api/day1/approvals", headers=auth(support.VIEWER))).json()
+    listed = (await client.get("/api/day1/approvals", headers=auth(support.ALICE))).json()
     assert {m["source_branch"]: m["opened_by_workflow"] for m in listed} == {
         edited.json()["source_branch"]: None,
         f"provision-cluster/{NEW}": "provision-cluster",
@@ -64,7 +64,7 @@ async def test_its_name_is_taken_and_a_second_create_is_refused_with_its_url(
     await support.open_provision_mr(gitlab, "ocp4-prod-agent-stand-site1-a")
     workflow = await support.open_provision_mr(gitlab, NEW)
     params = {"site": support.PROD_SITE, "mce": support.PROD_MCE, "flavor": "agent-standard"}
-    suggested = await client.get(SUGGEST, params=params, headers=auth(support.VIEWER))
+    suggested = await client.get(SUGGEST, params=params, headers=auth(support.ALICE))
     assert suggested.json()["name"] == "ocp4-prod-agent-stand-site1-b"
 
     again = await client.post(

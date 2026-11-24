@@ -38,7 +38,8 @@ export type ClusterPhase = "Provisioning" | "Ready" | "Error" | "Deleting" | "Un
 export interface ClusterStatus {
   name: string;
   site: string;
-  mce: string;
+  /** The MCE folder; `null` for a viewer, who never knows of the MCEs (ADR-0068). */
+  mce: string | null;
   kind?: ClusterKind;
   /** Always `Unknown`: live state comes from the status endpoints. */
   phase: ClusterPhase;
@@ -49,7 +50,8 @@ export interface ClusterStatus {
   created_by: string | null;
   created_at: string | null;
   mastertag: string | null;
-  path: string;
+  /** The file in the day1 repo; `null` for a viewer (its folders name the MCE). */
+  path: string | null;
   hosted_cluster: HostedClusterRef;
   naming: ClusterNaming;
   /** The file's owner numbers as text (`{merkaz, anaf, mador}`); `{}` when it has none (§13). */
@@ -132,7 +134,7 @@ export interface ClusterMetadata {
   created_by: string;
   created_at: string | null;
   site: string;
-  mce: string;
+  mce: string | null;
   /** Always empty: the inputs of a render are not stored. */
   variables: Record<string, unknown>;
   immutable_paths: string[];
@@ -143,12 +145,13 @@ export interface ClusterMetadata {
 export interface ClusterDetail {
   name: string;
   site: string;
-  mce: string;
+  /** `null` for a viewer, as every field that names the MCE: `gitlab_url`, `path`, `mce_default_mastertag`, `segments_manager` (ADR-0068). */
+  mce: string | null;
   /** A KV cluster is managed like a tenant's; only its delete asks for its name (ADR-0067). */
   kind?: ClusterKind;
   yaml: string;
-  gitlab_url: string;
-  path: string;
+  gitlab_url: string | null;
+  path: string | null;
   /** Send it back with an edit or delete: a stale one is 409 REVISION_CONFLICT. */
   last_commit_id: string;
   metadata: ClusterMetadata;

@@ -10,7 +10,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
+import { anyQuery, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
 import type {
   AddonDrift, ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, MachineConfigs, Rebooting,
   SyncPreview, ValueDrift,
@@ -164,10 +164,10 @@ async function openDetail(
   if (catalog) await page.route("**/api/day1/machine-configs", (r) => json(r, catalog));
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
-  await page.route(`**/api/day1/clusters/${NAME}?**`, (r) => json(r, DETAIL));
-  await page.route(`**/api/day1/clusters/${NAME}/drift?**`, (r) => json(r, clusterDrift));
-  await page.route(`**/api/day2/clusters/${NAME}/history?**`, (r) => json(r, []));
-  await page.route(`**/api/day2/clusters/${NAME}/addons?**`, (r) => json(r, CHARTS));
+  await page.route(anyQuery(`/api/day1/clusters/${NAME}`), (r) => json(r, DETAIL));
+  await page.route(anyQuery(`/api/day1/clusters/${NAME}/drift`), (r) => json(r, clusterDrift));
+  await page.route(anyQuery(`/api/day2/clusters/${NAME}/history`), (r) => json(r, []));
+  await page.route(anyQuery(`/api/day2/clusters/${NAME}/addons`), (r) => json(r, CHARTS));
   await page.route("**/api/day2/addons", (r) => json(r, []));
   const previewBodies: unknown[] = [];
   await page.route(`**/api/day1/clusters/${NAME}/sync/preview?**`, (r) => {

@@ -33,18 +33,18 @@ const CLUSTERS = "/api/day1/clusters";
 /** `/api/day1/clusters/{name}`, the name encoded. */
 export const clusterPath = (name: string) => `${CLUSTERS}/${encodeURIComponent(name)}`;
 
-/** The cluster a live-status read or stream is for: `?mce=` is required. */
-const onMce = (mce: string) => `?mce=${encodeURIComponent(mce)}`;
+/** The hub a live-status read or stream is for: an admin's `?mce=`; without it day1 reads the cluster's folder (ADR-0068). */
+const onMce = (mce: string | null) => (mce ? `?mce=${encodeURIComponent(mce)}` : "");
 
 export const clustersApi = {
   list: () => api.get<ClusterStatus[]>(CLUSTERS),
   driftSummary: () => api.get<DriftSummaryItem[]>(`${CLUSTERS}/drift-summary`),
   /** Every cluster's live status in one request (501 FEATURE_DISABLED when status is off). */
-  bulkStatus: (clusters: { name: string; mce: string }[]) =>
+  bulkStatus: (clusters: { name: string; mce?: string }[]) =>
     api.post<Record<string, ClusterLiveStatus>>(`${CLUSTERS}/bulk-status`, { clusters }),
-  status: (name: string, mce: string) => api.get<ClusterLiveStatus>(`${clusterPath(name)}/status${onMce(mce)}`),
+  status: (name: string, mce: string | null) => api.get<ClusterLiveStatus>(`${clusterPath(name)}/status${onMce(mce)}`),
   /** The server-sent status stream, read with fetch() so the Authorization header can be sent. */
-  statusStreamPath: (name: string, mce: string) => `${clusterPath(name)}/status/stream${onMce(mce)}`,
+  statusStreamPath: (name: string, mce: string | null) => `${clusterPath(name)}/status/stream${onMce(mce)}`,
   /** A free name for a flavor on a site and MCE (ADR-0040). */
   nameSuggestion: (params: Record<string, string>) =>
     api.get<NameSuggestion>(`${CLUSTERS}/name-suggestion?${new URLSearchParams(params).toString()}`),

@@ -6,10 +6,11 @@ Importing existing clusters into a flavor has its own module,
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.api.v1.scale_schemas import HeldReplicasOut
 from wingman_day1.api.v1.schemas import DriftStateOut, FlavorUpdateOut, MergeRequestLinkOut, _iso
 from wingman_day1.application.rollouts import (
@@ -64,7 +65,7 @@ class SpecClusterOut(BaseModel):
 
     name: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     phase: str = "Unknown"
     state: DriftStateOut
     is_drifted: bool | None
@@ -78,7 +79,7 @@ class SpecDriftOut(BaseModel):
 
     cluster: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     state: DriftStateOut
     is_drifted: bool | None
     spec_version: str | None
@@ -105,8 +106,8 @@ class RolloutClusterOut(BaseModel):
 
     name: str
     site: str
-    mce: str
-    path: str
+    mce: Annotated[str | None, ADMIN_ONLY]
+    path: Annotated[str | None, ADMIN_ONLY]
     from_version: str | None
     """The version its header names."""
     state: RolloutStateOut

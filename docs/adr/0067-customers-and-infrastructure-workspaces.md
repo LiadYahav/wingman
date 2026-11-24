@@ -1,7 +1,7 @@
 # ADR-0067: Two workspaces, Customers and Infrastructure: seeds and KV clusters are kinds of their own, and a viewer never knows of them or of the MCEs
 
 Date: 2026-11-23
-Status: Accepted
+Status: Accepted; amended by ADR-0068 (a viewer reads no MCE, no infrastructure name and no infrastructure file anywhere, and a tenant's cluster says its site but not its MCE)
 
 ## Context
 
@@ -78,7 +78,8 @@ API carries them:
 Enforced in day1 and day2, before anything is read for the request; the web
 only follows (as ADR-0038's 2026-11-23 amendment did for nodes). A tenant's
 cluster still says its site and MCE: that is where it lives, and how its
-live status is read.
+live status is read (superseded by ADR-0068: it says its site, never its
+MCE, and is found by its name).
 
 | Route | A viewer |
 |---|---|
@@ -215,6 +216,7 @@ locally. The existing fixtures keep their names.
   paths, never parsed), the lints, day2's approvals and audit, and an
   add-on's per-MCE values on its page. A viewer reading them may see an MCE's
   or a KV cluster's name; each is a later change if the team wants it.
+  (ADR-0068 filters every one of them, and the others its audit found.)
 
 ## Verification
 

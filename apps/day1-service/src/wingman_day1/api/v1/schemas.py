@@ -13,13 +13,14 @@ unchanged; every deliberate change is listed in
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from wingman_core.application.approvals import describe
 from wingman_core.domain.git import Commit
 from wingman_core.domain.merge_request import MergeRequest
+from wingman_core.web.viewer import ADMIN_ONLY
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.drift import ClusterDrift, FlavorUpdate
 from wingman_day1.domain.addons import AddonDrift, VersionDifference
@@ -234,7 +235,7 @@ class ClusterDriftOut(BaseModel):
 
     cluster: str
     site: str
-    mce: str
+    mce: Annotated[str | None, ADMIN_ONLY]
     state: DriftStateOut
     is_drifted: bool | None
     """``null`` when it could not be determined; ``error`` says why."""
