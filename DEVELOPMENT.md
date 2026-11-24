@@ -62,7 +62,7 @@ errors in `domain/errors.py` (mapped in `api/errors.py`), its use case's depende
 data is a Wingman feature, in `components/<area>/` and `lib/` (ADR-0056's 2026-11-23
 amendment).
 
-A system whose code or UI Wingman ports (server-scan, segments-manager) has a guide and a map
+A system whose code Wingman ports (server-scan, segments-manager) has a guide and a map
 in `docs/integrations/`: [server-scan.md](docs/integrations/server-scan.md) and
 [segments-manager.md](docs/integrations/segments-manager.md). A file that follows an upstream
 file is an entry of `docs/integrations/<system>.yaml` and ends its header with the line that
