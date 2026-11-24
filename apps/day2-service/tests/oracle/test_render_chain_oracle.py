@@ -332,6 +332,18 @@ SCENARIOS: dict[str, tuple[str, Callable[[Files], None], set[Rule], bool]] = {
         {Rule.MASTERTAG_INVALID},
         True,
     ),
+    # Regression (3.58.1): a prerelease is a valid tag to both, and both key the
+    # cluster's version pins and ocp-version label by its X.Y.Z, 4.16.0.
+    "a day1 mastertag on a prerelease": (
+        "redbull",
+        _add(
+            DAY1,
+            "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-herzi-site1.yaml",
+            "mastertag: 4.16.0-rc.1-x86_64\n",
+        ),
+        set(),
+        True,
+    ),
     "a UPI folder reusing a hosted-cluster name": (
         "redbull",
         _add(RB, "sites/site1/prod/upi/ocp4-prod-herzi-site1/cluster-roles/values.yaml", "{}\n"),

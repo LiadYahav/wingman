@@ -14,7 +14,7 @@ from wingman_day2.domain.errors import ChangeRefusedError
 from wingman_day2.domain.findings import Finding
 from wingman_day2.domain.lints import upgrade_check
 from wingman_day2.domain.stacks import Layer, LayerRole
-from wingman_day2.domain.versions import mastertag_problem
+from wingman_day2.domain.versions import mastertag_problem, ocp_version
 from wingman_day2.ports import ChartRepository, SigsRepository
 
 
@@ -97,4 +97,4 @@ class LintService:
         summary = topology.resolve(key, mce=mce)
         apps = [a for s in topology.teams for a in s.plan.apps_on(summary.ref)]
         trees = {s.team.name: s.repo.tree for s in topology.teams}
-        return summary, upgrade_check(apps, trees, to.split("-", 1)[0])
+        return summary, upgrade_check(apps, trees, ocp_version(to))

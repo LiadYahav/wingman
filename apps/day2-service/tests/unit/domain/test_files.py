@@ -99,15 +99,34 @@ def test_dump_values_round_trips_and_writes_an_empty_map_explicitly() -> None:
 
 @pytest.mark.parametrize(
     ("tag", "version"),
-    [("4.16.27-x86_64", "4.16.27"), ("4.20.9", "4.20.9"), ("4.19.10-multi-arch", "4.19.10")],
+    [
+        ("4.16.27-x86_64", "4.16.27"),
+        ("4.20.9", "4.20.9"),
+        ("4.19.10-multi-arch", "4.19.10"),
+        # The platform's own rule, not core's without_arch: its version pins and its
+        # day2.gitops/ocp-version label key a prerelease by its X.Y.Z (the oracle agrees).
+        ("4.16.0-rc.1-x86_64", "4.16.0"),
+    ],
 )
-def test_the_platform_strips_the_arch_at_the_first_dash(tag: str, version: str) -> None:
+def test_the_platform_keeps_what_comes_before_the_first_dash(tag: str, version: str) -> None:
     assert ocp_version(tag) == version
     assert mastertag_problem(tag) is None
 
 
-@pytest.mark.parametrize("tag", ["4.16", "latest", "4.16.x", 4.16])
-def test_a_mastertag_without_a_full_version_is_a_problem(tag: object) -> None:
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "4.16",
+        "latest",
+        "4.16.x",
+        4.16,
+        # Tags the hostedclusters-setup chart can't render into a release image (render_chain's
+        # looser -\S+ lets them through; no OpenShift release is tagged so)
+        "4.16.27-X86_64",
+        "4.16.27-x86_64:latest",
+    ],
+)
+def test_a_mastertag_that_is_no_release_tag_is_a_problem(tag: object) -> None:
     assert mastertag_problem(tag) is not None
 
 
