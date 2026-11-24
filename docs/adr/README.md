@@ -29,7 +29,7 @@ Status: Proposed | Accepted | Parked YYYY-MM-DD | Superseded by ADR-NNNN | Super
 | [0001](0001-layered-packages-with-ports.md) | Code is layered (domain, ports, application, infrastructure, web) and import-linter enforces it (amended 2026-11-17: an external system's day1 code is a package under `integrations/`, with the layers inside it and independent of the others; amended 2026-11-23: without their areas, the integrations keep the layers they still have) |
 | [0002](0002-gitlab-adapter-on-httpx.md) | GitLab is reached through an async httpx adapter, not python-gitlab |
 | [0003](0003-exact-pins-one-lockfile.md) | Dependencies are pinned exactly, in one workspace lockfile |
-| [0004](0004-rfc9457-error-envelope.md) | API errors are RFC 9457 problems with an append-only error code |
+| [0004](0004-rfc9457-error-envelope.md) | API errors are RFC 9457 problems with an append-only error code (amended 2026-11-24: a code whose every route was removed may go, recorded in the ADR that removed the routes) |
 | [0005](0005-fake-gitlab-and-contract-suite.md) | Tests run against an in-memory GitLab held honest by a contract suite |
 | [0006](0006-write-semantics.md) | Writes are guarded by `last_commit_id` and never retried |
 | [0007](0007-merge-request-identity-and-conventions.md) | An MR is `(project, iid)`; branch, title and description formats are a contract |

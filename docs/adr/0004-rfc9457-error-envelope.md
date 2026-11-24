@@ -1,7 +1,7 @@
 # ADR-0004: API errors are RFC 9457 problems with an append-only error code
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended 2026-11-24 (a code whose every route was removed may go)
 
 ## Context
 
@@ -30,7 +30,8 @@ built in one place (`wingman_core.web.exception_handlers`):
 ```
 
 - `code` is the stable member clients match on. `ErrorCode` is append-only:
-  a shipped code is never renamed or removed.
+  a shipped code is never renamed or removed (amended 2026-11-24: unless
+  every route that answered it was removed, below).
 - Services raise `AppError` subclasses. A `GitError` that reaches the boundary
   is translated (`from_git_error`), so "GitLab refused Wingman's token" (502
   `GIT_PERMISSION_DENIED`) is distinguishable from "you may not do this" (403
@@ -61,3 +62,23 @@ This is server-scan's ADR-0002, adopted as is.
 body, the Git error translation, framework errors, and that a 500 hides its
 message but carries the request id (also as a header, which Starlette would
 otherwise drop on 500s).
+
+## Amendment (2026-11-24): a code whose every route was removed may go
+
+3.52.1 removed the Segments and Server Scan areas (ADR-0066) and with them
+the shipped codes `JOB_ALREADY_RUNNING` and `SERVER_REFRESH_REFUSED`: only
+the areas' routes answered them, and those routes are a `404` now. "Never
+removed" above did not foresee a code with nothing left to answer it.
+
+- **A code stays while any route can answer it.** It is never renamed, and
+  never removed while a route still answers it: clients match on it.
+- **A code whose every route was removed may go**, in the same change as the
+  routes, from `ErrorCode` (`wingman_core.web.errors`) and the web's
+  `ErrorCode` (`apps/web/types/problem.ts`) alike. The ADR that removes the
+  routes records the code's removal (ADR-0066 for these two); a client that
+  still matches on it only ever saw it from a route that is gone.
+- A removed code's name is not reused for another meaning.
+
+Verification: `tests/repo/test_web_docs_contract.py` takes the known codes
+from `ErrorCode`, so the README, the guides it reads and the in-app docs cannot
+name a removed one.
