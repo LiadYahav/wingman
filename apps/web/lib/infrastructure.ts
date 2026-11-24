@@ -13,11 +13,6 @@ const byName = (a: { name: string }, b: { name: string }) =>
 
 const bySiteName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
-/** An MCE's servers: Inventory Management opened on that MCE. */
-export function mceServersHref(mce: string): string {
-  return `/inventory?mce=${encodeURIComponent(mce)}`;
-}
-
 /** One site's folders of one kind, sorted by name. */
 export interface SiteGroup<T> {
   site: string;

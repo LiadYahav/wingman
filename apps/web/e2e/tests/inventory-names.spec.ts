@@ -58,7 +58,7 @@ test("a pool's list is every free server, said so, when its labels name none", a
 
 test("a pool whose labels are unread counts no free server and says why", async ({ page }) => {
   await setUpInventory(page);
-  await go(page, "/inventory");
+  await go(page, `/inventory?mce=${SITE1_B}`);
   const row = pool(page, SITE1_B, SITE1_B_POOL);
   await expect(row.getByTestId("pool-labels-missing")).toHaveCount(0);
   await row.getByTestId("pool-ready").getByRole("button", { name: "Why not counted" }).hover();

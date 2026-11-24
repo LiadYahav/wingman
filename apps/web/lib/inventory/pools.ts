@@ -1,31 +1,16 @@
 /**
- * Grouping and labels for each MCE's pools (ADR-0057). The numbers are
- * day1's (server-scan's counts); nothing is recounted here.
+ * Labels for each MCE's pools, and the MCE the page opens on (ADR-0057). The
+ * numbers are day1's (server-scan's counts); nothing is recounted here.
  */
 
 import type { HardwareCount, MceInventory, PoolNames } from "@/types/inventory";
 
-export interface SiteGroup {
-  site: string;
-  /** MCEs with something to show: servers in server-scan, or InfraEnvs to fill. */
-  mces: MceInventory[];
-  /** MCEs server-scan names nothing on and whose InfraEnvs are unknown: a name each. */
-  quiet: MceInventory[];
-}
+/** Whether an MCE has something to show: servers in server-scan, or InfraEnvs to fill. */
+const hasPools = (mce: MceInventory): boolean => mce.known || mce.pools.length > 0;
 
-/** Whether an MCE gets a card: server-scan knows it, or its hub lists pools to fill. */
-const hasCard = (mce: MceInventory): boolean => mce.known || mce.pools.length > 0;
-
-/** The MCEs by site, in day1's order. */
-export function bySite(mces: MceInventory[]): SiteGroup[] {
-  const groups = new Map<string, SiteGroup>();
-  for (const mce of mces) {
-    const group = groups.get(mce.site) ?? { site: mce.site, mces: [], quiet: [] };
-    (hasCard(mce) ? group.mces : group.quiet).push(mce);
-    groups.set(mce.site, group);
-  }
-  return [...groups.values()];
-}
+/** The MCE the page shows when none is chosen: the first, in day1's order, with something to show. */
+export const firstWithPools = (mces: readonly MceInventory[]): MceInventory | undefined =>
+  mces.find(hasPools) ?? mces[0];
 
 /** `dell PowerEdge R650`, or what server-scan gives. */
 export function hardwareLabel(hardware: Pick<HardwareCount, "vendor" | "model">): string {

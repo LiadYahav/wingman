@@ -6,6 +6,7 @@ import { Hint } from "@/components/common/hint";
 import { originHint, originLabel, readablePhase, runSubject, runTone, startedAgo, type RunTone } from "@/lib/inventory/runs";
 import { cn } from "@/lib/utils";
 import type { InventoryRun } from "@/types/inventory";
+import { DIVIDER, HEADER_CELL, STICKY_HEAD } from "./table-style";
 
 const TONE: Record<RunTone, string> = {
   running: "bg-primary/12 text-primary",
@@ -63,17 +64,6 @@ function Status({ run }: { run: InventoryRun }) {
   );
 }
 
-/**
- * The lines between rows, and the firmer one under the header, from the
- * foreground so they show in both themes (1.4-1.5:1 and 1.5-1.8:1, about
- * Apple's separators; the theme's `border` at 60% was 1.15:1), and 3:1 or
- * more when the system asks for more contrast.
- */
-const DIVIDER = {
-  rows: "divide-foreground/15 contrast-more:divide-foreground/50",
-  header: "border-foreground/20 contrast-more:border-foreground/55",
-};
-
 const HEADERS = ["Started", "Who", "Pool", "Server", "Status", "Error"] as const;
 
 function RunRow({ run, now }: { run: InventoryRun; now: number }) {
@@ -87,12 +77,12 @@ function RunRow({ run, now }: { run: InventoryRun; now: number }) {
       </td>
       <td className="px-3 py-1.5 align-middle">
         <span className="block min-w-0">
-          <span className="block font-mono text-xs">{run.infra_env ?? "—"}</span>
-          <span className="block font-mono text-[11px] text-muted-foreground">{run.mce ?? run.workflow_id}</span>
+          <span className="block whitespace-nowrap font-mono text-xs">{run.infra_env ?? "—"}</span>
+          <span className="block whitespace-nowrap font-mono text-[11px] text-muted-foreground">{run.mce ?? run.workflow_id}</span>
         </span>
       </td>
       <td className="px-3 py-1.5 align-middle">
-        <span className="font-mono text-xs">{runSubject(run)}</span>
+        <span className="whitespace-nowrap font-mono text-xs">{runSubject(run)}</span>
       </td>
       <td className="px-3 py-1.5 align-middle">
         <Status run={run} />
@@ -118,16 +108,13 @@ export function RunsTable({ runs }: { runs: InventoryRun[] }) {
   return (
     <div className="overflow-auto rounded-xl border bg-card">
       <table aria-label="Add-server runs" className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
+        <thead className={STICKY_HEAD}>
           <tr className={cn("border-b", DIVIDER.header)}>
             {HEADERS.map((header) => (
               <th
                 key={header}
                 scope="col"
-                className={cn(
-                  "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75",
-                  header === "Error" && "max-w-xs"
-                )}
+                className={cn(HEADER_CELL, header === "Error" && "max-w-xs")}
               >
                 {header}
               </th>

@@ -25,21 +25,49 @@ const COLUMNS = [
 export function InventorySection() {
   return (
     <section>
-      <SectionHeader id="inventory" icon={Boxes} title="Inventory Management" subtitle="Each MCE's server pools, the add-server runs, and installing servers" badge="Admins" />
+      <SectionHeader id="inventory" icon={Boxes} title="Inventory Management" subtitle="An MCE's server pools, every add-server run, and installing servers" badge="Admins" />
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         A server reaches a hosted cluster in two steps. The platform&apos;s <InlineCode>add-server-to-mce</InlineCode>{" "}
         workflow makes it an Agent in one of an MCE&apos;s InfraEnv pools (the inventory); then any NodePool on that
         InfraEnv that is short of nodes takes a free Agent, whatever its cluster. herzi, one per MCE hub, starts the same
         workflow by itself to keep the pools topped up, so the customers&apos; demand is filled without them.{" "}
         <strong>Inventory Management</strong>, in the Infrastructure workspace&apos;s sidebar, shows both, for admins
-        only; a seed is a card like any MCE, since herzi fills its pools too.
+        only; a seed is an MCE like any other, since herzi fills its pools too.
+      </p>
+
+      <h3 className="text-base font-semibold mb-3">One MCE at a time</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        The picker at the top shows one MCE: day1&apos;s MCEs by site, each with its available Agents. An MCE
+        server-scan names no server on is still offered, marked <strong>not in server-scan</strong>. The page opens on
+        the MCE you picked last in this browser, else the first with something to show. The MCE is in the address,{" "}
+        <InlineCode>/inventory?mce=&lt;name&gt;</InlineCode>, so a link opens it (each Customer MCE and each MCE
+        on the Infrastructure Overview&apos;s Free Servers does); an MCE the day1 repo does not have shows the
+        first one, saying so. The header&apos;s total available is every MCE&apos;s, and its <strong>Install servers</strong> opens on the MCE
+        shown.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        <strong>InfraEnvs</strong>, beside the table, picks the pools shown, several at once: find them by a part of
+        their name, check each, or <strong>Pick the n found</strong>; none picked shows every pool. The picked names
+        are listed under it, each with its own remove button, and <strong>Unpick all</strong> empties them. They are
+        names, not one MCE&apos;s: a pool is named <InlineCode>&lt;flavor&gt;-&lt;mtl|kv&lt;cpu&gt;&gt;-&lt;zone&gt;</InlineCode>,
+        with no hub and no site, so the hubs of a site have the same ones. Changing the MCE keeps them: the new MCE
+        shows those it has and lists those it lacks as <strong>kept for the other MCEs</strong>, still picked. They are
+        in the address too (<InlineCode>&amp;infraEnv=&lt;a&gt;,&lt;b&gt;</InlineCode>) and this browser remembers them
+        with the MCE.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+        The table&apos;s own filters narrow it further: a search on the name; <strong>Zone</strong> and{" "}
+        <strong>Size</strong>, from the names that follow the convention (an older name is found by the search
+        only); and <strong>Only with servers</strong>. <strong>n of m InfraEnvs</strong> says how many show; when none
+        does, <strong>Clear filters</strong> clears them and the InfraEnvs picked. Click <strong>InfraEnv</strong> or{" "}
+        <strong>Available</strong> in the header to sort by name or by available, most first. A long table scrolls in
+        its own frame with its header in view.
       </p>
 
       <h3 className="text-base font-semibold mb-3">The pools</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-        One card per MCE, with its servers <strong>available</strong>, <strong>in clusters</strong> and its{" "}
-        <strong>total</strong>, then a row per InfraEnv pool. Click an MCE&apos;s name to fold its pools away; this
-        browser remembers it. The counts are server-scan&apos;s: an MCE it names no server on says{" "}
+        The MCE shown has its servers <strong>available</strong>, <strong>in clusters</strong> and its{" "}
+        <strong>total</strong>, then a row per InfraEnv pool. The counts are server-scan&apos;s: an MCE it names no server on says{" "}
         <strong>not in server-scan</strong>, never zero. A pool&apos;s servers are named by its InfraEnv&apos;s
         agentLabels, as the workflow&apos;s pool draw names them: <InlineCode>ocp-&lt;flavor&gt;-&lt;size&gt;-&lt;site&gt;-…</InlineCode>{" "}
         from <InlineCode>redbull.io/flavor</InlineCode>, <InlineCode>redbull.io/size</InlineCode> and{" "}
@@ -56,7 +84,7 @@ export function InventorySection() {
       </div>
       <p className="text-sm text-muted-foreground leading-relaxed mb-5">
         Where this deployment does not read the MCE&apos;s own InfraEnv list (live status off), the pools are the
-        InfraEnvs its cluster files name, and the card says so in one quiet line. Without their labels a pool&apos;s
+        InfraEnvs its cluster files name, and the page says so in one quiet line. Without their labels a pool&apos;s
         servers&apos; names are unknown: it counts none ready, and its list is every free server.
       </p>
       <Callout type="info" title="Used Agents, waiting for herzi to remove">
@@ -64,7 +92,7 @@ export function InventorySection() {
         an Agent is free again (a scale-down, an uninstall, a deleted cluster) it is <strong>used</strong>: no NodePool
         that excludes the label takes it, and herzi takes it out of the MCE. It is never counted as available or in a
         total: the MCE and its pool say <strong>2 used</strong>, with the servers in the tooltip. herzi removes none of
-        them while a NodePool that could take them lacks the exclusion, so the card then lists those NodePools by
+        them while a NodePool that could take them lacks the exclusion, so the MCE then lists those NodePools by
         cluster, each linked to its page; each cluster takes the exclusion through its own merge request, and a{" "}
         <InlineCode>Replace</InlineCode> NodePool is left out of it. Used Agents are read from the MCE, so with live
         status off they are not shown.
@@ -79,7 +107,8 @@ export function InventorySection() {
 
       <h3 className="text-base font-semibold mb-3">The runs</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-        <strong>Runs</strong> lists the platform&apos;s add-server runs, herzi&apos;s and people&apos;s, newest first: when
+        <strong>Runs</strong> lists the platform&apos;s add-server runs on every MCE and into every InfraEnv,
+        herzi&apos;s and people&apos;s, whatever is picked above, newest first: when
         each started, who, its pool, its server, its status and its error, in the workflow&apos;s words. A run that named
         its server is a <strong>Person</strong>&apos;s; a pool draw is <strong>herzi or a person</strong>, since the
         orchestrator does not record who. A run installed with its health checks waived says <strong>checks waived</strong>, with which in a tooltip.
@@ -88,8 +117,8 @@ export function InventorySection() {
       <h3 className="text-base font-semibold mb-3">Install servers</h3>
       <div className="space-y-4 mb-5">
         <Step n={1} title="Open the dialog">
-          An admin&apos;s <strong>Install servers</strong> beside the title, or <strong>Install</strong> on a pool row,
-          which opens it on that MCE and pool.
+          An admin&apos;s <strong>Install servers</strong> beside the title, which opens it on the MCE shown, or{" "}
+          <strong>Install</strong> on a pool row, which opens it on that MCE and pool.
         </Step>
         <Step n={2} title="Choose the MCE and the pool">
           Pick the MCE and its InfraEnv, or type another InfraEnv name: the workflow first checks the MCE has it.

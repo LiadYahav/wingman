@@ -157,22 +157,22 @@ export function PoolRow({
   const why = infraEnv !== null ? unnamedReason(pool) : null;
   return (
     <>
-      <tr data-testid="pool-row" data-pool={infraEnv ?? ""} className={cn("align-middle", open && "bg-muted/40")}>
-        <td className="whitespace-nowrap py-1.5 pr-3 font-mono text-xs">
+      <tr data-testid="pool-row" data-pool={infraEnv ?? ""} className={cn("align-middle transition-colors hover:bg-muted/40", open && "bg-muted/40")}>
+        <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">
           <PoolName pool={pool} />
         </td>
-        <td className="py-1.5 pr-3" data-testid="pool-available"><Available pool={pool} usedLabels={usedLabels} /></td>
-        <td className="py-1.5 pr-3 text-xs text-muted-foreground">
+        <td className="px-3 py-1.5" data-testid="pool-available"><Available pool={pool} usedLabels={usedLabels} /></td>
+        <td className="whitespace-nowrap px-3 py-1.5 text-xs text-muted-foreground">
           {pool.hardware.map((h) => `${hardwareLabel(h)} ×${h.available}`).join(", ") || "—"}
         </td>
-        <td className="py-1.5 pr-3" data-testid="pool-ready">
+        <td className="px-3 py-1.5" data-testid="pool-ready">
           {infraEnv !== null && pool.ready !== null ? (
             <CountButton count={pool.ready} label={`${pool.ready} ready in server-scan for ${infraEnv}`} open={open} controls={listId} onToggle={toggle} />
           ) : (
             <Dash why={why} />
           )}
         </td>
-        <td className="py-1.5 pr-3" data-testid="pool-needs-fix">
+        <td className="px-3 py-1.5" data-testid="pool-needs-fix">
           {infraEnv !== null && pool.needs_fix !== null ? (
             <CountButton
               count={fix}
@@ -186,8 +186,8 @@ export function PoolRow({
             <Dash why={why} />
           )}
         </td>
-        <td className="py-1.5 pr-3 font-medium tabular-nums" data-testid="pool-total">{pool.total}</td>
-        <td className="py-1.5 text-right">
+        <td className="px-3 py-1.5 font-medium tabular-nums" data-testid="pool-total">{pool.total}</td>
+        <td className={cn("py-1.5 text-right", canAdd && "px-3")}>
           {canAdd && infraEnv !== null && (
             <button
               type="button"
@@ -202,7 +202,7 @@ export function PoolRow({
       </tr>
       {open && infraEnv !== null && (
         <tr id={listId}>
-          <td colSpan={POOL_COLUMNS} className="pb-2">
+          <td colSpan={POOL_COLUMNS} className="px-3 pb-2">
             <PoolServers mce={mce} infraEnv={infraEnv} />
           </td>
         </tr>

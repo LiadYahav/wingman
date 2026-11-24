@@ -6,7 +6,9 @@ Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live statu
 server with its health checks waived); amended 2026-11-23 (3.54.0: a pool's servers are named by
 its InfraEnv's agentLabels); amended 2026-11-23 (3.55.0: herzi's used Agents apart, and the
 NodePools that do not exclude its label); amended by ADR-0067 (2026-11-23: admins only, in the Infrastructure workspace);
-amended 2026-11-24 (no Server Scan area: Inventory names servers as text, ADR-0066)
+amended 2026-11-24 (no Server Scan area: Inventory names servers as text, ADR-0066); amended
+2026-11-24 (one MCE at a time: an MCE picker, several InfraEnvs picked and kept across MCEs, the
+pools filtered; the runs stay every MCE's)
 
 ## Context
 
@@ -232,6 +234,9 @@ condition fails a health check, never past a safety refusal, and refused
   collapsed MCEs are a per-viewer convenience in `localStorage`
   (`wingman-inventory-collapsed`), read and written in `try`/`catch`:
   with storage blocked the choice lasts for the page.
+  *(Superseded 2026-11-24: the page shows one MCE at a time, picked, so
+  nothing collapses; see that amendment. `wingman-inventory-collapsed` is
+  no longer read.)*
 - **Installing a server that needs a fix**, after a confirmation. In the
   dialog's "Choose servers", a Needs fix server can be checked (a locked,
   in-maintenance or contested one still cannot). Install then opens a
@@ -294,8 +299,9 @@ the candidates' groups and reasons, the `422` before the workflow, the
 payload, the fake's refusal and its record, the log);
 `tests/unit/infrastructure/test_add_server_workflow.py` (the body, the
 run's waived checks); `apps/web/lib/inventory/waiver.test.ts` and
-`collapsed.test.ts` (Vitest); `apps/web/e2e/tests/inventory-ready.spec.ts`
-(collapsing and its memory, the counts and totals, the list's groups, a pool
+`collapsed.test.ts` (Vitest; removed 2026-11-24 with the collapse);
+`apps/web/e2e/tests/inventory-ready.spec.ts` (collapsing and its memory,
+until 2026-11-24; the counts and totals, the list's groups, a pool
 draw never sending the waiver, the confirmation, Back sending nothing, the
 `422`).
 
@@ -523,3 +529,94 @@ Verification: `apps/day1-service/tests/api/test_inventory_api.py`
 (`test_runs_are_listed_from_the_orchestrator_alone`: a run names its server
 and carries no `server_id`) and `apps/web/e2e/tests/platforms-apart.spec.ts`
 (nothing in Wingman leads to a page of its own for server-scan).
+
+## Amendment (2026-11-24): one MCE at a time; the InfraEnvs picked across MCEs; the runs stay every MCE's
+
+The user (2026-11-24): "I think this is better to make a MCE Selector +
+InfraEnv because I will get some of 60 InfraEnv maybe. About the herzi down
+there keep it for all the MCEs all of the infraenv. It's important." Then:
+"and we can select multiple infra envs! And changing mce not have to change
+the infraenvs!" One card per MCE, each with a row per InfraEnv, stopped
+fitting a page once an MCE holds about 60 pools. Web only: day1's API, and
+what it counts, do not change.
+
+- **One MCE at a time, picked.** A searchable picker at the top lists day1's
+  MCEs by site, in day1's order, each with its available Agents; one
+  server-scan names nothing on (the old "Not in server-scan: …" line) is
+  still offered, marked "not in server-scan", and shows "No pools on this
+  MCE" when its hub names none either. Below it, the MCE shown has what its
+  card had: its counts, the line saying its pools come from its cluster
+  files, its used Agents unread, the NodePools that do not exclude the
+  used-Agent label, then its pool table. A seed is an MCE in the picker like
+  any other. The default is the first MCE, in day1's order, that server-scan
+  knows or whose hub names pools.
+- **The InfraEnvs picked, several at once, by name.** A second picker beside
+  the table's filters lists the MCE's InfraEnvs with a search, each a
+  checkbox, and "Pick the n found" for a search's results; none picked shows
+  every pool. The picked names are listed under it, each removable, and
+  "Unpick all" empties them. They are **names, not one MCE's**: the
+  platform's InfraEnv is `<flavor>-<mtl|kv<cpu>>-<zone>`, with no hub and no
+  site, so every hub at a site has the same pool names. A change of MCE
+  keeps them; the new MCE shows those it has, and says quietly which it
+  lacks ("Not on <mce>, kept for the other MCEs"), still picked, so going
+  back shows them again. An MCE with none of them says so, with Clear
+  filters.
+- **In the URL, and remembered.** `?mce=<name>&infraEnv=<a>,<b>` (also
+  repeated `infraEnv`): a link opens one MCE (each Customer MCE and the
+  Overview's Free Servers rows link to theirs, through one helper,
+  `inventoryHref` in `lib/inventory/view.ts`), and a reload keeps the view. Each change replaces the history entry, as the
+  clusters list's filters do. Both parts are also kept per viewer in
+  `localStorage` (`wingman-inventory-view`, `{mce, infraEnvs}`), read and
+  written in `try`/`catch`; the URL's part wins, else the remembered one,
+  each on its own, so a link to one MCE keeps the viewer's InfraEnvs. An
+  unknown `?mce=` shows the default MCE and says so in one quiet line. No
+  name is trusted to exist: an MCE or InfraEnv day1 does not list only
+  narrows the view.
+- **The table's own filters**, not remembered: a search on part of the name;
+  Zone and Size, one each or All, from the names that follow the convention
+  (none shown when no name does; a name before it, such as
+  `dell-r660-site1-128c-1024gb-5tb`, is found by the search only); and "Only
+  with servers" (available, ready, needs fix, or herzi's used Agents). They
+  combine with the InfraEnvs picked and stay while the MCE changes, a zone
+  or size the new MCE lacks being dropped. "n of m InfraEnvs" says what
+  shows; when nothing does, "No InfraEnvs match" offers Clear filters, which
+  clears them and the InfraEnvs picked. The servers no one InfraEnv names
+  show, last, only while nothing filters by name.
+- **A long table stays readable.** It scrolls inside its own frame (at most
+  70% of the window) under a sticky, translucent header, the runs table's
+  look; a phone's page keeps its width and the table scrolls sideways
+  inside. InfraEnv and Available sort the rows (by name, natural order, the
+  default; by available, most first), the header saying which
+  (`aria-sort`).
+- **The runs stay every MCE's.** The Runs section lists every MCE's and
+  every InfraEnv's add-server runs, herzi's and people's, whatever is picked
+  above, and says so beside its title ("every MCE and InfraEnv"). The
+  header's total available stays the whole fleet's ("across n MCEs").
+- **Install servers** in the header opens the dialog on the MCE shown; a
+  row's Install still opens it on that MCE and pool.
+- **Nothing collapses any more** (the 3.38.0 amendment's collapse is
+  superseded): its code and `wingman-inventory-collapsed` are gone.
+
+Rejected:
+
+- **Keeping the stacked cards with a filter over them**: 60 rows per MCE
+  times the MCEs is still one long page, and herzi's runs fall far below.
+- **The InfraEnvs picked per MCE**: the names carry no hub, and the user
+  wants them to survive a change of MCE.
+- **Filtering the runs by the picks**: the user wants herzi's and people's
+  runs on every MCE and InfraEnv in view, whatever is picked.
+- **Zone and size as picks** (selecting every matching InfraEnv): two ways
+  to pick the same names, and an `az1` and `mtl` pick would add, not narrow.
+  They are filters; the search's "Pick the n found" picks by a part of the
+  name.
+
+Verification: `apps/web/lib/inventory/pool-filter.test.ts` (a name's flavor,
+size and zone, the zones and sizes offered, the picks split by MCE, the
+filters combined, the order) and `view.test.ts` (the URL both ways, storage
+blocked or malformed, which MCE and InfraEnvs show) (Vitest);
+`apps/web/e2e/tests/inventory-picker.spec.ts` (picking an MCE, `?mce=` and
+an unknown one, the header's Install servers, several InfraEnvs picked and
+kept across MCEs with those an MCE lacks reported, the filters, the empty
+state, the order and the sticky header, the runs never filtered, a phone's
+width), with `inventory.spec.ts`, `inventory-names.spec.ts` and
+`inventory-used.spec.ts` showing the other MCE by the picker or `?mce=`.

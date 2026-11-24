@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api-client";
 import type { ErrorCode } from "@/types";
 import type { InventoryRun, MceInventory } from "@/types/inventory";
-import { bySite, hardwareLabel, totalAvailable, unnamedReason } from "./pools";
+import { firstWithPools, hardwareLabel, totalAvailable, unnamedReason } from "./pools";
 import { originLabel, readablePhase, runSubject, runTone, runningCount, startedAgo } from "./runs";
 import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled } from "./start";
 
@@ -30,18 +30,13 @@ describe("a pool's servers by name", () => {
 });
 
 describe("the pools", () => {
-  it("are grouped by site, in day1's order, an MCE with nothing to show kept as a name", () => {
-    const groups = bySite([
-      mce("a", "site1"),
-      mce("b", "site2"),
-      mce("c", "site1", { known: false }),
-      mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0,
-                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null } }] }),
-    ]);
-    expect(groups.map((g) => [g.site, g.mces.map((m) => m.mce), g.quiet.map((m) => m.mce)])).toEqual([
-      ["site1", ["a", "d"], ["c"]],
-      ["site2", ["b"], []],
-    ]);
+  it("open on the first MCE, in day1's order, with something to show: servers in server-scan or InfraEnvs", () => {
+    const pool = { infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0,
+                   server_prefix: "ocp-p-mtl-site1-", label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null } };
+    expect(firstWithPools([mce("c", "site1", { known: false }), mce("a", "site1"), mce("b", "site2")])?.mce).toBe("a");
+    expect(firstWithPools([mce("c", "site1", { known: false }), mce("d", "site1", { known: false, pools: [pool] })])?.mce).toBe("d");
+    expect(firstWithPools([mce("c", "site1", { known: false })])?.mce).toBe("c");
+    expect(firstWithPools([])).toBeUndefined();
   });
 
   it("label hardware as server-scan gives it, and sum the available Agents", () => {
