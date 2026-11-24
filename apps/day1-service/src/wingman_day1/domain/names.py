@@ -31,6 +31,10 @@ CLUSTER_FILE_PREFIX: Final = "ocp4-"
 MAX_DNS_LABEL: Final = 63
 HOSTED_CLUSTER_PREFIX: Final = "ocp4-"
 """What the chart puts before ``clusterName`` to name the HostedCluster."""
+MAX_NEW_CLUSTER_NAME: Final = 24
+"""The longest name after ``ocp4-`` a new cluster may have: provision-cluster's own limit
+(team-redbull/workflows ``MAX_HOSTED_CLUSTER_NAME_LENGTH``), and every create starts it
+(ADR-0014's 2026-11-24 amendment)."""
 
 _DNS_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _SEGMENT = r"[a-z0-9]+"
@@ -185,8 +189,9 @@ def new_cluster_problems(
     """Every reason ``stem`` may not be used for a new cluster under ``site``/``mce``.
 
     The name must follow the convention for its site, its env must be the
-    MCE's env (so the MCE must follow the convention too), and every object
-    name the chart derives from it must fit in a DNS-1123 label.
+    MCE's env (so the MCE must follow the convention too), provision-cluster
+    must accept its length, and every object name the chart derives from it
+    must fit in a DNS-1123 label.
     """
     cluster = describe_cluster(stem, site=site)
     problems = list(cluster.problems)
@@ -208,8 +213,22 @@ def new_cluster_problems(
             f"sequence {sequence!r} of cluster {stem!r} must be one letter, a to z "
             f"({base}-a): a number is not the convention"
         )
-    problems.extend(_length_problems(stem, naming))
+    problems.extend(_create_length_problems(stem, naming))
     return problems
+
+
+def _create_length_problems(stem: str, naming: HostedClusterNaming) -> list[str]:
+    """Why ``stem`` is too long for a new cluster: provision-cluster's limit, then the chart's."""
+    name = stem.removeprefix(CLUSTER_FILE_PREFIX)
+    problems = (
+        [
+            f"cluster name {name!r} is {len(name)} characters; provision-cluster takes at most "
+            f"{MAX_NEW_CLUSTER_NAME} after {CLUSTER_FILE_PREFIX!r}"
+        ]
+        if len(name) > MAX_NEW_CLUSTER_NAME
+        else []
+    )
+    return problems + _length_problems(stem, naming)
 
 
 def _length_problems(stem: str, naming: HostedClusterNaming) -> list[str]:
@@ -252,7 +271,8 @@ def suggest_cluster_name(
     """``ocp4-<env>-<flavor>-<site>-<letter>`` with the first letter no name in ``taken`` has.
 
     The env is the MCE's. The flavor's name is cut short (never below one
-    character) until the chart's object names fit in a DNS-1123 label.
+    character) until provision-cluster takes the name and the chart's object
+    names fit in a DNS-1123 label.
     """
     short = short_name_of(flavor)
     env = describe_mce(mce, site=site).env
@@ -264,7 +284,7 @@ def suggest_cluster_name(
             None,
             (f"MCE {mce!r} does not follow ocp4-<env>-mce-{site}-<letter>, so it gives no env",),
         )
-    while len(short) > 1 and _length_problems(f"ocp4-{env}-{short}-{site}-a", naming):
+    while len(short) > 1 and _create_length_problems(f"ocp4-{env}-{short}-{site}-a", naming):
         short = short[:-1].rstrip("-")
     base = f"ocp4-{env}-{short}-{site}"
     free = next((letter for letter in SEQUENCE_LETTERS if f"{base}-{letter}" not in taken), None)
@@ -277,4 +297,4 @@ def suggest_cluster_name(
             (f"every name from {base}-a to {base}-z is taken; type another name",),
         )
     name = f"{base}-{free}"
-    return NameSuggestion(name, env, short, free, tuple(_length_problems(name, naming)))
+    return NameSuggestion(name, env, short, free, tuple(_create_length_problems(name, naming)))

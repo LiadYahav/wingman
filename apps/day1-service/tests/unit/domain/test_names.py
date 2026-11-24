@@ -155,14 +155,17 @@ def test_an_off_convention_new_name_is_refused() -> None:
     assert problems
 
 
-def test_the_control_plane_namespace_must_fit_in_63_characters_when_ocp4_is_stripped() -> None:
-    # hcp-<cn>-ocp4-<cn> is 10 + 2 * len(cn); cn is "prod-<name>-site1".
-    fits = "ocp4-prod-" + "a" * 15 + "-site1"
-    too_long = "ocp4-prod-" + "a" * 16 + "-site1"
+def test_a_new_name_is_at_most_24_characters_after_ocp4_as_provision_cluster_takes() -> None:
+    # cn is "prod-<name>-site1"; provision-cluster refuses more than 24.
+    fits = "ocp4-prod-" + "a" * 13 + "-site1"
+    too_long = "ocp4-prod-" + "a" * 14 + "-site1"
     mce = "ocp4-prod-mce-site1-a"
     assert new_cluster_problems(fits, site="site1", mce=mce, naming=STRIP) == []
     problems = new_cluster_problems(too_long, site="site1", mce=mce, naming=STRIP)
-    assert any("control-plane namespace" in p and "limit is 63" in p for p in problems)
+    assert problems == [
+        f"cluster name {too_long.removeprefix('ocp4-')!r} is 25 characters; provision-cluster "
+        "takes at most 24 after 'ocp4-'"
+    ]
 
 
 def test_the_sandbox_keeps_the_whole_stem_so_its_limit_is_tighter() -> None:
@@ -263,9 +266,9 @@ def test_an_off_convention_mce_gives_no_env_and_no_name() -> None:
     assert "does not follow ocp4-<env>-mce-site1-<letter>" in suggestion.problems[0]
 
 
-def test_a_long_flavor_name_is_cut_until_the_chart_names_fit() -> None:
+def test_a_long_flavor_name_is_cut_until_provision_cluster_and_the_chart_take_it() -> None:
     suggestion = _suggest(flavor="agent-standard")
-    assert suggestion.name == "ocp4-prod-agent-standar-site1-a"
+    assert suggestion.name == "ocp4-prod-agent-stand-site1-a"
     assert suggestion.problems == ()
     assert new_cluster_problems(suggestion.name, site="site1", mce=PROD_MCE, naming=STRIP) == []
     # The sandbox keeps the whole stem, so the cut is deeper

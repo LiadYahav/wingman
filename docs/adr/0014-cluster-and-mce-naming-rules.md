@@ -1,7 +1,7 @@
 # ADR-0014: New cluster names follow ocp4-<env>-<name>-<site>[-<seq>]; existing ones are flagged, not hidden
 
 Date: 2026-11-07
-Status: Accepted; amended by ADR-0040 (a new cluster's `<seq>` is one letter, `a` to `z`)
+Status: Accepted; amended by ADR-0040 (a new cluster's `<seq>` is one letter, `a` to `z`) and on 2026-11-24 (a new name is at most 24 characters after `ocp4-`)
 
 ## Context
 
@@ -52,3 +52,20 @@ the limit is 26 characters; see ADR-0015.)
 dashed sites, env mismatch, off-convention MCE, namespace length in both
 modes) and the create refusals in
 `apps/day1-service/tests/unit/application/test_clusters.py`.
+
+## Amendment 2026-11-24: a new name is at most 24 characters after `ocp4-`
+
+Every create starts provision-cluster (ADR-0042's 2026-11-23 amendment), and
+provision-cluster refuses a name whose part after `ocp4-` is longer than 24
+characters (team-redbull/workflows `shared/cluster_names.py`,
+`MAX_HOSTED_CLUSTER_NAME_LENGTH`, since 2026-11-11), counting a HostedCluster
+named `openshift-<cn>` as the chart in Git names it. Wingman's own rule, the
+63-character control-plane namespace with the `ocp4-<cn>` HostedCluster seen
+live (ADR-0015), allowed 26, so a 25- or 26-character name got the
+workflow's 422 after the form had accepted it. A new name is now refused at
+25 characters (`MAX_NEW_CLUSTER_NAME`, `domain/names.py`), and the name
+suggestion cuts a flavor's name until it fits: `agent-standard` gives
+`ocp4-prod-agent-stand-site1-a`. The DNS-label checks stay as they were, and
+an existing cluster's name is never refused for its length. If production's
+HostedClusters really are `ocp4-<cn>` and the workflows team raises its limit
+to 26, this constant follows it.
